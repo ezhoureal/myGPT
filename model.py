@@ -26,13 +26,27 @@ class Attention(nn.Module):
         super().__init__()
         self.qkv_weight = nn.Linear(config.n_emb, config.n_emb * 3)
         self.n_emb = config.n_emb
-    def forward(self, x):
+        self.n_head = config.n_head
+        self.proj = nn.Linear(config.n_emb, config.n_emb)
+        T = config.block_size
+        self.register_buffer("mask", torch.tril(torch.ones(T, T)).view(1, 1, T, T))
+    def forward(self, x: torch.Tensor):
+        B, T, C = x.size() # batch size, time (sequence length), channel (token embedding dimension)
         # add kv cache later for inference
         qkv: torch.Tensor = self.qkv_weight(x) # (batch, length, emb)
         q, k, v = qkv.split(self.n_emb, dim=2)
-        attention = q @ k.transpose() / math.sqrt(self.n_emb)
-        v = self.vw(x)
-        return x
+        # split into heads: (B, heads, seq, head_dim)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        # (seq, headDim) @ (headDim, seq) = (seq, seq)
+        attention = q @ k.transpose(-1, -2) / math.sqrt(self.n_emb)
+        # only attend to previous tokens. do :T because T <= block_size
+        attention = attention.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
+        attention = torch.softmax(attention, dim=-1)
+        y = attention @ v # (seq, seq) @ (seq, headDim) = (seq, headDim)
+        y = self.proj(y)
+        return y
 
 class Layer(nn.Module):
     def __init__(self, config: Config):
