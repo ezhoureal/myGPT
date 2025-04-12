@@ -5,35 +5,35 @@ import torch.nn as nn
 
 @dataclass
 class Config:
-    block_size: int = 100
-    vocab_size: int = 100
-    n_head: int = 6
-    n_layer: int = 5
-    n_emb: int = 256 # hidden size
+    block_size: int = 1024
+    vocab_size: int = 50257
+    n_head: int = 12
+    n_layer: int = 12
+    n_emb: int = 768 # hidden size
 
 class MLP(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
-        self.linear = nn.Linear(config.n_emb, 2 * config.n_emb)
+        self.c_fc = nn.Linear(config.n_emb, 4 * config.n_emb)
         self.gelu = nn.GELU(approximate="tanh")
-        self.proj = nn.Linear(config.n_emb * 2, config.n_emb)
+        self.c_proj = nn.Linear(config.n_emb * 4, config.n_emb)
     def forward(self, x):
-        x = self.linear(x)
-        return self.proj(self.gelu(x))
+        x = self.c_fc(x)
+        return self.c_proj(self.gelu(x))
 
 class Attention(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
-        self.qkv_weight = nn.Linear(config.n_emb, config.n_emb * 3)
+        self.c_attn = nn.Linear(config.n_emb, config.n_emb * 3)
         self.n_emb = config.n_emb
         self.n_head = config.n_head
-        self.proj = nn.Linear(config.n_emb, config.n_emb)
+        self.c_proj = nn.Linear(config.n_emb, config.n_emb)
         T = config.block_size
         self.register_buffer("mask", torch.tril(torch.ones(T, T)).view(1, 1, T, T))
     def forward(self, x: torch.Tensor):
         B, T, C = x.size() # batch size, time (sequence length), channel (token embedding dimension)
         # add kv cache later for inference
-        qkv: torch.Tensor = self.qkv_weight(x) # (batch, length, emb)
+        qkv: torch.Tensor = self.c_attn(x) # (batch, length, emb)
         q, k, v = qkv.split(self.n_emb, dim=2)
         # split into heads: (B, heads, seq, head_dim)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
@@ -45,21 +45,56 @@ class Attention(nn.Module):
         attention = attention.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
         attention = torch.softmax(attention, dim=-1)
         y = attention @ v # (seq, seq) @ (seq, headDim) = (seq, headDim)
-        y = self.proj(y)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.c_proj(y)
         return y
 
 class Layer(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
-        self.ln1 = nn.LayerNorm(config.n_emb)
-        self.ln2 = nn.LayerNorm()
-        self.mlp = MLP(config)
+        self.ln_1 = nn.LayerNorm(config.n_emb)
         self.attn = Attention(config)
+        self.ln_2 = nn.LayerNorm(config.n_emb)
+        self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn(self.ln1(x))
-        x = x + self.mlp(self.ln2(x))
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
         return x
     
 
 class GPT(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_emb),
+            wpe = nn.Embedding(config.block_size, config.n_emb),
+            h = nn.ModuleList([Layer(config) for _ in range(config.n_layer)]),
+            ln_f = nn.LayerNorm(config.n_emb)
+        ))
+        self.lm_head = nn.Linear(config.n_emb, config.vocab_size, bias=False)
+    
+    @classmethod
+    def from_pretrained(cls):
+        from transformers import AutoTokenizer, GPT2LMHeadModel
+
+        model = GPT(Config())
+        sd = model.state_dict()
+        sd_keys = [k for k in sd.keys()if not k.endswith(".attn.mask")]
+        tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+        model_hf = GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
+        hf_sd = model_hf.state_dict()
+        hf_keys = hf_sd.keys()
+
+        keys_to_transpose = {".attn.c_attn.weight", ".mlp.c_fc.weight", ".mlp.c_proj.weight"}
+        assert sd_keys.__len__() == hf_keys.__len__()
+        for k in sd_keys:
+            if any(k.endswith(postFix) for postFix in keys_to_transpose):
+                assert sd[k].shape == hf_sd[k].shape[::-1]
+                with torch.no_grad():
+                    sd[k].copy_(hf_sd[k].t())
+            else:
+                assert sd[k].shape == hf_sd[k].shape, f'key = {k}, sd shape = {sd[k].shape}, hf shape = {hf_sd[k].shape}'
+                with torch.no_grad():
+                    sd[k].copy_(hf_sd[k])
+GPT.from_pretrained()
