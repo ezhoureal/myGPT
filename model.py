@@ -120,8 +120,12 @@ class GPT(nn.Module):
         return model
 
 # Check if CUDA is available and set the device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+device = (
+    torch.device("mps") if torch.backends.mps.is_available() else
+    torch.device("cuda") if torch.cuda.is_available() else
+    torch.device("cpu")
+)
+print(f'using device {device}')
 # Move the model to the device
 model = GPT.from_pretrained().to(device)
 
