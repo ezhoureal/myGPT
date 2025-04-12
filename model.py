@@ -10,6 +10,7 @@ class Config:
     n_head: int = 12
     n_layer: int = 12
     n_emb: int = 768 # hidden size
+    dropout: float = 0
 
 class MLP(nn.Module):
     def __init__(self, config: Config):
@@ -19,7 +20,8 @@ class MLP(nn.Module):
         self.c_proj = nn.Linear(config.n_emb * 4, config.n_emb)
     def forward(self, x):
         x = self.c_fc(x)
-        return self.c_proj(self.gelu(x))
+        x = self.gelu(x)
+        return self.c_proj(x)
 
 class Attention(nn.Module):
     def __init__(self, config: Config):
@@ -29,7 +31,7 @@ class Attention(nn.Module):
         self.n_head = config.n_head
         self.c_proj = nn.Linear(config.n_emb, config.n_emb)
         T = config.block_size
-        self.register_buffer("mask", torch.tril(torch.ones(T, T)).view(1, 1, T, T))
+        self.register_buffer("mask", torch.tril(torch.ones(T, T, dtype=torch.float32)).view(1, 1, T, T))
     def forward(self, x: torch.Tensor):
         B, T, C = x.size() # batch size, time (sequence length), channel (token embedding dimension)
         # add kv cache later for inference
@@ -40,7 +42,7 @@ class Attention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
         # (seq, headDim) @ (headDim, seq) = (seq, seq)
-        attention = q @ k.transpose(-1, -2) / math.sqrt(self.n_emb)
+        attention = q @ k.transpose(-1, -2) * (1.0 / math.sqrt(k.size(-1)))
         # only attend to previous tokens. do :T because T <= block_size
         attention = attention.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
         attention = torch.softmax(attention, dim=-1)
@@ -81,7 +83,7 @@ class GPT(nn.Module):
         # x.shape = (B, T)
         B, T = x.shape
         assert T <= self.config.block_size
-        pos = torch.arange(0, T, x.shape[1])
+        pos = torch.arange(0, T, device=x.device)
         pos_emb = self.transformer.wpe(pos) # (T, C)
         x_emb = self.transformer.wte(x) + pos_emb # (B, T, C)
         for layer in self.transformer.h:
@@ -89,7 +91,7 @@ class GPT(nn.Module):
         z = self.transformer.ln_f(x_emb)
         assert z.shape == (B, T, self.config.n_emb)
         next = self.lm_head(z)
-        return next
+        return next # logits
     
     @classmethod
     def from_pretrained(cls):
@@ -103,10 +105,11 @@ class GPT(nn.Module):
         hf_sd = model_hf.state_dict()
         hf_keys = hf_sd.keys()
 
-        keys_to_transpose = {".attn.c_attn.weight", ".mlp.c_fc.weight", ".mlp.c_proj.weight"}
+        transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
         assert sd_keys.__len__() == hf_keys.__len__()
         for k in sd_keys:
-            if any(k.endswith(postFix) for postFix in keys_to_transpose):
+            assert hf_keys.__contains__(k)
+            if any(k.endswith(postFix) for postFix in transposed):
                 assert sd[k].shape == hf_sd[k].shape[::-1]
                 with torch.no_grad():
                     sd[k].copy_(hf_sd[k].t())
