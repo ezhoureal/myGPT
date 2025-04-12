@@ -64,8 +64,9 @@ class Layer(nn.Module):
     
 
 class GPT(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: Config):
         super().__init__()
+        self.config = config
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_emb),
             wpe = nn.Embedding(config.block_size, config.n_emb),
@@ -73,6 +74,22 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_emb)
         ))
         self.lm_head = nn.Linear(config.n_emb, config.vocab_size, bias=False)
+
+    # predicts the next token
+    # x = all previous tokens
+    def forward(self, x):
+        # x.shape = (B, T)
+        B, T = x.shape
+        assert T <= self.config.block_size
+        pos = torch.arange(0, T, x.shape[1])
+        pos_emb = self.transformer.wpe(pos) # (T, C)
+        x_emb = self.transformer.wte(x) + pos_emb # (B, T, C)
+        for layer in self.transformer.h:
+            x_emb = layer(x_emb)
+        z = self.transformer.ln_f(x_emb)
+        assert z.shape == (B, T, self.config.n_emb)
+        next = self.lm_head(z)
+        return next
     
     @classmethod
     def from_pretrained(cls):
@@ -97,4 +114,8 @@ class GPT(nn.Module):
                 assert sd[k].shape == hf_sd[k].shape, f'key = {k}, sd shape = {sd[k].shape}, hf shape = {hf_sd[k].shape}'
                 with torch.no_grad():
                     sd[k].copy_(hf_sd[k])
-GPT.from_pretrained()
+        return model
+
+# using a fixed config for now
+model = GPT.from_pretrained()
+model.forward(torch.arange(0, 5).view(5, 1))
