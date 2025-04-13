@@ -177,9 +177,10 @@ def inference(model: GPT):
 import time
 torch.set_float32_matmul_precision('high')
 def train():
-    B = 6
+    B = 1
     T = 1024
     model = GPT(Config()).to(device)
+    # model = torch.compile(model)
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     data = DataLoader(device)
     for i in tqdm.trange(10):
