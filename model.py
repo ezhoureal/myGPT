@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import math
 import torch
 import torch.nn as nn
+import tiktoken, tqdm
 
 @dataclass
 class Config:
@@ -79,7 +80,7 @@ class GPT(nn.Module):
 
     # predicts the next token
     # x = all previous tokens
-    def forward(self, x):
+    def forward(self, x, target):
         # x.shape = (B, T)
         B, T = x.shape
         assert T <= self.config.block_size
@@ -90,8 +91,11 @@ class GPT(nn.Module):
             x_emb = layer(x_emb)
         z = self.transformer.ln_f(x_emb)
         assert z.shape == (B, T, self.config.n_emb)
-        next = self.lm_head(z)
-        return next # logits
+        next = self.lm_head(z) # (B, T, C)
+        loss = None
+        if target is not None:
+            loss = torch.nn.functional.cross_entropy(next.view(-1, next.shape[-1]), target.view(-1))
+        return next, loss
     
     @classmethod
     def from_pretrained(cls):
@@ -126,35 +130,48 @@ device = (
     torch.device("cpu")
 )
 print(f'using device {device}')
-# Move the model to the device
-model = GPT.from_pretrained().to(device)
 
-BATCH = 5
-MAX_LEN = 30
-K = 50
-PROMPT = "Hello, LLM. What's your name?"
+def inference(model: GPT):
+    BATCH = 5
+    MAX_LEN = 30
+    K = 50
+    PROMPT = "Hello, LLM. What's your name?"
 
-# inference
-import tiktoken, tqdm
+    enc = tiktoken.encoding_for_model('gpt2')
+    tokens = enc.encode(PROMPT)
+    x = torch.tensor(tokens, dtype=torch.long, device=device)  # Move tensor to device
+    x = x.unsqueeze(0).repeat(BATCH, 1)  # (B, T)
 
-enc = tiktoken.encoding_for_model('gpt2')
-tokens = enc.encode(PROMPT)
-PROMPT_LEN = len(tokens)
-x = torch.tensor(tokens, dtype=torch.long, device=device)  # Move tensor to device
-x = x.unsqueeze(0).repeat(BATCH, 1)  # (B, T)
+    for i in tqdm.trange(MAX_LEN):
+        logits, _ = model(x, None)
+        logits = logits[:, -1, :].squeeze(1)
+        assert logits.shape == (BATCH, Config.vocab_size)
+        probs = torch.softmax(logits, dim=-1)
+        (top_probs, top_idx) = torch.topk(probs, K)
+        next_idx = torch.multinomial(top_probs, 1)  # sample 1 from top_k
+        assert next_idx.shape == (BATCH, 1)
+        next_token = torch.gather(top_idx, dim=1, index=next_idx)
+        assert next_token.shape == (BATCH, 1)
+        x = torch.cat((x, next_token), dim=1)[:, -Config.block_size:]
 
-for i in tqdm.trange(MAX_LEN):
-    logits: torch.Tensor = model(x)
-    print(f'shape = {logits.shape}')
-    logits = logits[:, -1, :].squeeze(1)
-    assert logits.shape == (BATCH, Config.vocab_size)
-    probs = torch.softmax(logits, dim=-1)
-    (top_probs, top_idx) = torch.topk(probs, K)
-    next_idx = torch.multinomial(top_probs, 1)  # sample 1 from top_k
-    assert next_idx.shape == (BATCH, 1)
-    next_token = torch.gather(top_idx, dim=1, index=next_idx)
-    assert next_token.shape == (BATCH, 1)
-    x = torch.cat((x, next_token), dim=1)[:, -Config.block_size:]
+    response = enc.decode_batch(x.tolist())
+    print(f'output = {response}')
 
-response = enc.decode_batch(x.tolist())
-print(f'output = {response}')
+def train():
+    enc = tiktoken.encoding_for_model('gpt2')
+    model = GPT(Config()).to(device)
+    with open("data.txt", "r") as f:
+        txt = f.read()
+    tokens = enc.encode(txt)
+    B = 4
+    T = 8
+    buffer = torch.tensor(tokens[:B * T + 1], device=device)
+    x = buffer[:-1].view(B, T)
+    y = buffer[1:].view(B, T)
+    logits, loss = model(x, y)
+    print(f'loss = {loss}')
+
+train()
+
+# model = GPT.from_pretrained().to(device)
+# inference()
