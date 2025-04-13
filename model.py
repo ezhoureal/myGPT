@@ -162,11 +162,17 @@ def inference(model: GPT):
 def train():
     B = 4
     T = 8
-    data = DataLoader(device)
-    x, y = data.get_batch(B, T)
+    optimizer = torch.optim.Adam(GPT(Config()).parameters(), lr=3e-4)
     model = GPT(Config()).to(device)
-    logits, loss = model(x, y)
-    print(f'loss = {loss}')
+    data = DataLoader(device)
+    for i in range(10):
+        x, y = data.get_batch(B, T)
+
+        optimizer.zero_grad()
+        logits, loss = model(x, y)
+        print(f'loss = {loss}')
+        loss.backward()
+        optimizer.step()
 
 train()
 
