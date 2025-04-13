@@ -174,20 +174,24 @@ def inference(model: GPT):
     response = enc.decode_batch(x.tolist())
     print(f'output = {response}')
 
+import time
 def train():
-    B = 4
-    T = 8
+    B = 6
+    T = 1024
     model = GPT(Config()).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     data = DataLoader(device)
-    for i in range(10):
+    for i in tqdm.trange(10):
         x, y = data.get_batch(B, T)
 
+        t1 = time.time()
         optimizer.zero_grad()
         logits, loss = model(x, y)
         print(f'loss = {loss}')
         loss.backward()
         optimizer.step()
+        t2 = time.time()
+        print(f'token processed speed = {B * T / (t2 - t1)}')
 
 train()
 
