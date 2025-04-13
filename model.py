@@ -21,6 +21,7 @@ class MLP(nn.Module):
         self.c_fc = nn.Linear(config.n_emb, 4 * config.n_emb)
         self.gelu = nn.GELU(approximate="tanh")
         self.c_proj = nn.Linear(config.n_emb * 4, config.n_emb)
+        self.c_proj.RESIDUAL_STD = 1 # special marker
     def forward(self, x):
         x = self.c_fc(x)
         x = self.gelu(x)
@@ -80,6 +81,19 @@ class GPT(nn.Module):
         ))
         self.lm_head = nn.Linear(config.n_emb, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight
+
+    def init_weight(self, module: nn.Module):
+        if module.isinstance(nn.Embedding):
+            torch.nn.init.normal(module.weight, mean=0.0, std=0.02)
+        elif module.isinstance(nn.Linear):
+            std = 0.02
+            # scale down std because residual connections are added to final result
+            # so std would accumulate
+            if hasattr(module, "RESIDUAL_STD"):
+                std *= (2 * self.config.n_layer) ** -0.5 # times 2 because Attn + MLP counts as 2
+            torch.nn.init.normal(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
 
     # predicts the next token
     # x = all previous tokens
