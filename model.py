@@ -121,7 +121,7 @@ class GPT(nn.Module):
 
 # Check if CUDA is available and set the device
 device = (
-    torch.device("mps") if torch.backends.mps.is_available() else
+    # torch.device("mps") if torch.backends.mps.is_available() else
     torch.device("cuda") if torch.cuda.is_available() else
     torch.device("cpu")
 )
