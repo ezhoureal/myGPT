@@ -79,6 +79,7 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_emb)
         ))
         self.lm_head = nn.Linear(config.n_emb, config.vocab_size, bias=False)
+        self.transformer.wte.weight = self.lm_head.weight
 
     # predicts the next token
     # x = all previous tokens
