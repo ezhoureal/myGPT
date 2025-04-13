@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import tiktoken, tqdm
 
+from data_loader import DataLoader
+
 @dataclass
 class Config:
     block_size: int = 1024
@@ -158,16 +160,11 @@ def inference(model: GPT):
     print(f'output = {response}')
 
 def train():
-    enc = tiktoken.encoding_for_model('gpt2')
-    model = GPT(Config()).to(device)
-    with open("data.txt", "r") as f:
-        txt = f.read()
-    tokens = enc.encode(txt)
     B = 4
     T = 8
-    buffer = torch.tensor(tokens[:B * T + 1], device=device)
-    x = buffer[:-1].view(B, T)
-    y = buffer[1:].view(B, T)
+    data = DataLoader(device)
+    x, y = data.get_batch(B, T)
+    model = GPT(Config()).to(device)
     logits, loss = model(x, y)
     print(f'loss = {loss}')
 
