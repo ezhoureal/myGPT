@@ -162,8 +162,8 @@ def inference(model: GPT):
 def train():
     B = 4
     T = 8
-    optimizer = torch.optim.Adam(GPT(Config()).parameters(), lr=3e-4)
     model = GPT(Config()).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     data = DataLoader(device)
     for i in range(10):
         x, y = data.get_batch(B, T)
