@@ -175,6 +175,7 @@ def inference(model: GPT):
     print(f'output = {response}')
 
 import time
+torch.set_float32_matmul_precision('high')
 def train():
     B = 6
     T = 1024
@@ -186,12 +187,13 @@ def train():
 
         t1 = time.time()
         optimizer.zero_grad()
-        logits, loss = model(x, y)
-        print(f'loss = {loss}')
+        with torch.autocast(device_type=device.__str__(), dtype=torch.bfloat16):
+            logits, loss = model(x, y)
         loss.backward()
         optimizer.step()
+        torch.cuda.synchronize()
         t2 = time.time()
-        print(f'token processed speed = {B * T / (t2 - t1)}')
+        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}')
 
 train()
 
