@@ -177,11 +177,25 @@ def inference(model: GPT):
     response = enc.decode_batch(x.tolist())
     print(f'output = {response}')
 
+B = 1
+T = 1024
+
+MAX_STEP = 50
+MAX_LR = 6e-4
+MIN_LR = MAX_LR * 0.1
+WARMUP_STEP = 10
+
+def get_lr(step):
+    if step < WARMUP_STEP:
+        return MIN_LR + step / WARMUP_STEP * (MAX_LR - MIN_LR)
+    if step > MAX_STEP:
+        return MIN_LR
+    decay_ratio = (step - WARMUP_STEP) / (MAX_STEP - WARMUP_STEP)
+    return MIN_LR + (math.cos(decay_ratio * math.pi) / 2.0 + 0.5) * (MAX_LR - MIN_LR)
+
 import time
 torch.set_float32_matmul_precision('high')
 def train():
-    B = 1
-    T = 1024
     model = GPT(Config(vocab_size=50304)).to(device)
     # model = torch.compile(model)
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
@@ -197,11 +211,15 @@ def train():
         else:
             logits, loss = model(x, y)
         loss.backward()
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        lr = get_lr(i)
+        for group in optimizer.param_groups:
+            group["lr"] = lr
         optimizer.step()
         if device == 'cuda':
             torch.cuda.synchronize()
         t2 = time.time()
-        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}')
+        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm}')
 
 train()
 
