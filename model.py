@@ -117,6 +117,20 @@ class GPT(nn.Module):
             loss = torch.nn.functional.cross_entropy(next.view(-1, next.shape[-1]), target.view(-1))
         return next, loss
     
+    def configure_optimizer(self, weight_decay: int, learning_rate: int, device):
+        params = [p for pn, p in self.named_parameters() if p.requires_grad]
+        decay_params = [p for p in params if p.dim() >= 2] # matrices
+        non_decay_params = [p for p in params if p.dim() < 2]
+        param_groups = [
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': non_decay_params, 'weight_decay': 0.0}
+        ]
+        fused_available = 'fused' in torch.inspect.signature(torch.optim.AdamW).parameters
+        fused = fused_available and device == 'cuda'
+        extra_args = dict(fused=True) if fused else dict()
+        optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, **extra_args)
+        print(f'fused available = {fused}')
+        return optimizer
     @classmethod
     def from_pretrained(cls):
         from transformers import AutoTokenizer, GPT2LMHeadModel
@@ -177,9 +191,6 @@ def inference(model: GPT):
     response = enc.decode_batch(x.tolist())
     print(f'output = {response}')
 
-B = 1
-T = 1024
-
 MAX_STEP = 50
 MAX_LR = 6e-4
 MIN_LR = MAX_LR * 0.1
@@ -196,9 +207,11 @@ def get_lr(step):
 import time
 torch.set_float32_matmul_precision('high')
 def train():
+    B = 1
+    T = 1024
     model = GPT(Config(vocab_size=50304)).to(device)
     # model = torch.compile(model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = model.configure_optimizer(weight_decay=0.1,learning_rate=3e-4, device=device)
     data = DataLoader(device)
     for i in tqdm.trange(10):
         x, y = data.get_batch(B, T)
@@ -219,7 +232,7 @@ def train():
         if device == 'cuda':
             torch.cuda.synchronize()
         t2 = time.time()
-        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm}')
+        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm:.3e}, learning rate = {lr:.3e}')
 
 train()
 
