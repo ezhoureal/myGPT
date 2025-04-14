@@ -207,7 +207,9 @@ def get_lr(step):
 import time
 torch.set_float32_matmul_precision('high')
 def train():
+    desired_batch = 2
     B = 1
+    grad_accum_step = desired_batch // B # to simulate larger batch size
     T = 1024
     model = GPT(Config(vocab_size=50304)).to(device)
     # model = torch.compile(model)
@@ -218,12 +220,17 @@ def train():
 
         t1 = time.time()
         optimizer.zero_grad()
-        if device == 'cuda':
-            with torch.autocast(device_type=device.__str__(), dtype=torch.bfloat16):
+        accum_loss = 0
+        for inner_step in range(grad_accum_step):
+            if device == 'cuda':
+                with torch.autocast(device_type=device.__str__(), dtype=torch.bfloat16):
+                    logits, loss = model(x, y)
+            else:
                 logits, loss = model(x, y)
-        else:
-            logits, loss = model(x, y)
-        loss.backward()
+            loss /= grad_accum_step
+            accum_loss += loss.detach()
+            print(f'loss = {loss}, accum_loss = {accum_loss}')
+            loss.backward()
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         lr = get_lr(i)
         for group in optimizer.param_groups:
@@ -232,7 +239,7 @@ def train():
         if device == 'cuda':
             torch.cuda.synchronize()
         t2 = time.time()
-        print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm:.3e}, learning rate = {lr:.3e}')
+        print(f'loss = {accum_loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm:.3e}, learning rate = {lr:.3e}')
 
 train()
 
