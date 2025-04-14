@@ -51,6 +51,9 @@ class Attention(nn.Module):
         attention = attention.masked_fill(self.mask[:, :, :T, :T] == 0, float('-inf'))
         attention = torch.softmax(attention, dim=-1)
         y = attention @ v # (seq, seq) @ (seq, headDim) = (seq, headDim)
+
+        # this runs flash attention implemented by PyTorch
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.c_proj(y)
         return y
@@ -188,11 +191,15 @@ def train():
 
         t1 = time.time()
         optimizer.zero_grad()
-        with torch.autocast(device_type=device.__str__(), dtype=torch.bfloat16):
+        if device == 'cuda':
+            with torch.autocast(device_type=device.__str__(), dtype=torch.bfloat16):
+                logits, loss = model(x, y)
+        else:
             logits, loss = model(x, y)
         loss.backward()
         optimizer.step()
-        torch.cuda.synchronize()
+        if device == 'cuda':
+            torch.cuda.synchronize()
         t2 = time.time()
         print(f'loss = {loss}, token processed speed = {B * T / (t2 - t1)}')
 
