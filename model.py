@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 import math
+import os
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 import tiktoken, tqdm
 
 from data_loader import DataLoader
@@ -53,7 +55,7 @@ class Attention(nn.Module):
         y = attention @ v # (seq, seq) @ (seq, headDim) = (seq, headDim)
 
         # this runs flash attention implemented by PyTorch
-        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
+        # y = nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.c_proj(y)
         return y
@@ -87,16 +89,16 @@ class GPT(nn.Module):
 
     def init_weight(self, module: nn.Module):
         if module.isinstance(nn.Embedding):
-            torch.nn.init.normal(module.weight, mean=0.0, std=0.02)
+            nn.init.normal(module.weight, mean=0.0, std=0.02)
         elif module.isinstance(nn.Linear):
             std = 0.02
             # scale down std because residual connections are added to final result
             # so std would accumulate
             if hasattr(module, "RESIDUAL_STD"):
                 std *= (2 * self.config.n_layer) ** -0.5 # times 2 because Attn + MLP counts as 2
-            torch.nn.init.normal(module.weight, mean=0.0, std=0.02)
+            nn.init.normal(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+                nn.init.zeros_(module.bias)
 
     # predicts the next token
     # x = all previous tokens
@@ -114,7 +116,7 @@ class GPT(nn.Module):
         next = self.lm_head(z) # (B, T, C)
         loss = None
         if target is not None:
-            loss = torch.nn.functional.cross_entropy(next.view(-1, next.shape[-1]), target.view(-1))
+            loss = nn.functional.cross_entropy(next.view(-1, next.shape[-1]), target.view(-1))
         return next, loss
     
     def configure_optimizer(self, weight_decay: int, learning_rate: int, device):
@@ -157,12 +159,28 @@ class GPT(nn.Module):
                     sd[k].copy_(hf_sd[k])
         return model
 
-# Check if CUDA is available and set the device
-device = (
-    # torch.device("mps") if torch.backends.mps.is_available() else
-    torch.device("cuda") if torch.cuda.is_available() else
-    torch.device("cpu")
-)
+from torch.distributed import init_process_group, destroy_process_group
+ddp = int(os.environ.get('RANK', -1)) != -1
+if ddp:
+    assert torch.cuda.is_available()
+    init_process_group(backend='nccl')
+    ddp_rank = int(os.environ.get('RANK'))
+    ddp_local_rank = int(os.environ.get('LOCAL_RANK'))
+    world_size = int(os.environ.get('WORLD_SIZE'))
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    is_master = ddp_rank == 0
+else:
+    ddp_rank = 0
+    ddp_local_rank = 0
+    world_size = 1
+    is_master = True
+    # Check if CUDA is available and set the device
+    device = (
+        # torch.device("mps") if torch.backends.mps.is_available() else
+        torch.device("cuda") if torch.cuda.is_available() else
+        torch.device("cpu")
+    )
 print(f'using device {device}')
 
 def inference(model: GPT):
@@ -212,8 +230,11 @@ def train():
     grad_accum_step = desired_batch // B # to simulate larger batch size
     T = 1024
     model = GPT(Config(vocab_size=50304)).to(device)
+    if ddp:
+        model = nn.parallel.DistributedDataParallel(model, [ddp_local_rank])
+    raw_model = model.module if ddp else model
     # model = torch.compile(model)
-    optimizer = model.configure_optimizer(weight_decay=0.1,learning_rate=3e-4, device=device)
+    optimizer = raw_model.configure_optimizer(weight_decay=0.1,learning_rate=3e-4, device=device)
     data = DataLoader(device)
     for i in tqdm.trange(10):
         x, y = data.get_batch(B, T)
@@ -229,9 +250,14 @@ def train():
                 logits, loss = model(x, y)
             loss /= grad_accum_step
             accum_loss += loss.detach()
-            print(f'loss = {loss}, accum_loss = {accum_loss}')
+            if ddp: # only sync backward when accum grad finishes
+                assert isinstance(model, nn.parallel.DistributedDataParallel)
+                model.require_backward_grad_sync = inner_step == grad_accum_step - 1
             loss.backward()
-        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        if ddp:
+            accum_loss = dist.all_reduce(accum_loss, op=dist.ReduceOp.AVG)
+
+        norm = nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         lr = get_lr(i)
         for group in optimizer.param_groups:
             group["lr"] = lr
@@ -242,6 +268,8 @@ def train():
         print(f'loss = {accum_loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm:.3e}, learning rate = {lr:.3e}')
 
 train()
+if ddp:
+    destroy_process_group()
 
 # model = GPT.from_pretrained().to(device)
 # inference()
