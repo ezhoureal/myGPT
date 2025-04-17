@@ -50,7 +50,7 @@ def test_kv_cache_matches_attention():
     assert torch.allclose(output_attention, output_kv_attention, atol=1e-5), "Outputs of Attention and AttentionWithKVCache do not match"
 
     # decode
-    for i in range(8):
+    for i in range(16):
         inc = torch.randn(2, 1, 32)
         x = torch.cat((x, inc), dim=1)
         output_attention = attention(x)[:, -1, :]

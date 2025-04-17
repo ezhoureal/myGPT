@@ -82,7 +82,7 @@ class AttentionWithKVCache(nn.Module):
         if self.len == 0:
             # initialize kv cache
             self.k_cache = k.clone()
-            self.v_cache= v.clone()
+            self.v_cache = v.clone()
         else:
             assert T == 1
             self.k_cache = torch.cat([self.k_cache, k], dim=1)
@@ -91,10 +91,9 @@ class AttentionWithKVCache(nn.Module):
         k = self.k_cache.view(B, T + self.len, self.n_head, C // self.n_head).transpose(1, 2)
         v = self.v_cache.view(B, T + self.len, self.n_head, C // self.n_head).transpose(1, 2)
         attn: torch.Tensor = q @ k.transpose(-2, -1) * (k.size(-1) ** -0.5)
-        mask = torch.tril(torch.ones(T, T + self.len)).view(1, 1, T, T + self.len)
-        print(f'mask shape = {mask.shape}, attn prev shape = {attn.shape}')
-        attn = attn.masked_fill(mask == 0, float('-inf'))
-        print(f'attn post shape = {attn.shape}')
+        if (self.len == 0):
+            mask = torch.tril(torch.ones(T, T + self.len)).view(1, 1, T, T + self.len)
+            attn = attn.masked_fill(mask == 0, float('-inf'))
         attn = torch.softmax(attn, dim=-1)
         y = attn @ v
         # (B, head, T, head_dim)
