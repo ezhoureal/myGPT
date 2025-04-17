@@ -153,12 +153,11 @@ class GPT(nn.Module):
                 nn.init.zeros_(module.bias)
 
     # predicts the next token
-    # x = all previous tokens
-    def forward(self, x, target):
+    def forward(self, x, target, startIdx: int = 0):
         # x.shape = (B, T)
         B, T = x.shape
         assert T <= self.config.block_size
-        pos = torch.arange(0, T, device=x.device)
+        pos = torch.arange(start=startIdx, end=startIdx + T, device=x.device)
         pos_emb = self.transformer.wpe(pos) # (T, C)
         x_emb = self.transformer.wte(x) + pos_emb # (B, T, C)
         for layer in self.transformer.h:

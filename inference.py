@@ -16,7 +16,8 @@ def inference(model: GPT, device: torch.device):
     x = x.unsqueeze(0).repeat(BATCH, 1)  # (B, T)
     output = x
     for i in tqdm.trange(MAX_LEN):
-        logits, _ = model(x, None)
+        index = 0 if i == 0 else output.size(1) - 1
+        logits, _ = model(x, None, index)
         logits = logits[:, -1, :].squeeze(1)
         assert logits.shape == (BATCH, Config.vocab_size)
         probs = torch.softmax(logits, dim=-1)
