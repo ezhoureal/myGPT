@@ -11,6 +11,7 @@ class Config:
     n_layer: int = 12
     n_emb: int = 768 # hidden size
     dropout: float = 0
+    use_kv_cache: bool = False # this implies inference mode
 
 class MLP(nn.Module):
     def __init__(self, config: Config):
@@ -55,19 +56,78 @@ class Attention(nn.Module):
         y = self.c_proj(y)
         return y
 
+class AttentionWithKVCache(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.c_attn = nn.Linear(config.n_emb, config.n_emb * 3)
+        self.n_emb = config.n_emb
+        self.n_head = config.n_head
+        self.c_proj = nn.Linear(config.n_emb, config.n_emb)
+        self.len = 0
+        self.config = config
+
+    def share_weights_with_attention(self, attention: Attention):
+        self.c_attn.weight = attention.c_attn.weight
+        self.c_attn.bias = attention.c_attn.bias
+        self.c_proj.weight = attention.c_proj.weight
+        self.c_proj.bias = attention.c_proj.bias
+
+    @torch.no_grad # inference only
+    def forward(self, x: torch.Tensor):
+        B, T, C = x.size()
+        assert C == self.n_emb
+        # prefill
+        qkv:torch.Tensor = self.c_attn(x)
+        q, k, v = qkv.split(self.n_emb, dim=2)
+        if self.len == 0:
+            # initialize kv cache
+            self.k_cache = torch.zeros(B, self.config.block_size, self.config.n_emb, device=x.device)
+            self.v_cache = torch.zeros(B, self.config.block_size, self.config.n_emb, device=x.device)
+            self.k_cache[:, :T, :] = k
+            self.v_cache[:, :T, :] = v
+        else:
+            self.k_cache[:, self.len, :] = k.squeeze(1)
+            self.v_cache[:, self.len, :] = v.squeeze(1)
+            k = self.k_cache[:, :self.len + 1, :]
+            v = self.v_cache[:, :self.len + 1, :]
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        k = k.view(B, T + self.len, self.n_head, C // self.n_head).transpose(1, 2)
+        v = v.view(B, T + self.len, self.n_head, C // self.n_head).transpose(1, 2)
+        attn: torch.Tensor = q @ k.transpose(-2, -1) * (k.size(-1) ** -0.5)
+        if self.len == 0:
+            mask = torch.tril(torch.ones(T, T).view(1, 1, T, T))
+            attn = attn.masked_fill(mask == 0, float('-inf'))
+        attn = torch.softmax(attn, dim=-1)
+        y = attn @ v
+        # (B, head, T, head_dim)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.c_proj(y)
+
+        self.len += T
+        return y
+
 class Layer(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
         self.ln_1 = nn.LayerNorm(config.n_emb)
         self.attn = Attention(config)
+        if (config.use_kv_cache):
+            self.kv_attn = AttentionWithKVCache(config)
         self.ln_2 = nn.LayerNorm(config.n_emb)
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+        ln = self.ln_1(x)
+        if hasattr(self, "kv_attn"):
+            attn = self.kv_attn(ln)
+            # cmp = self.attn(ln)
+            # assert attn.shape == cmp.shape
+            # assert attn.equal(cmp)
+        else:
+            attn = self.attn(ln)
+        x = x + attn
         x = x + self.mlp(self.ln_2(x))
         return x
-    
 
 class GPT(nn.Module):
     def __init__(self, config: Config):
@@ -129,19 +189,20 @@ class GPT(nn.Module):
         print(f'fused available = {fused}')
         return optimizer
     @classmethod
-    def from_pretrained(cls):
+    def from_pretrained(cls, config: Config):
         from transformers import AutoTokenizer, GPT2LMHeadModel
 
-        model = GPT(Config())
+        model = GPT(config)
         sd = model.state_dict()
         sd_keys = [k for k in sd.keys()if not k.endswith(".attn.mask")]
+        sd_keys = [k for k in sd_keys if k.count(".kv_attn.") == 0]
         tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
         model_hf = GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
         hf_sd = model_hf.state_dict()
         hf_keys = hf_sd.keys()
 
         transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-        assert sd_keys.__len__() == hf_keys.__len__()
+        assert sd_keys.__len__() == hf_keys.__len__(), sd_keys
         for k in sd_keys:
             assert hf_keys.__contains__(k)
             if any(k.endswith(postFix) for postFix in transposed):
@@ -152,4 +213,9 @@ class GPT(nn.Module):
                 assert sd[k].shape == hf_sd[k].shape, f'key = {k}, sd shape = {sd[k].shape}, hf shape = {hf_sd[k].shape}'
                 with torch.no_grad():
                     sd[k].copy_(hf_sd[k])
+        if config.use_kv_cache:
+            layers: nn.ModuleList = model.transformer.h
+            for layer in layers:
+                assert isinstance(layer, Layer)
+                layer.kv_attn.share_weights_with_attention(layer.attn)
         return model

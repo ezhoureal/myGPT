@@ -3,6 +3,7 @@ import tiktoken
 import tqdm
 from model import Config, GPT
 
+@torch.no_grad
 def inference(model: GPT, device: torch.device):
     BATCH = 5
     MAX_LEN = 30
@@ -13,7 +14,7 @@ def inference(model: GPT, device: torch.device):
     tokens = enc.encode(PROMPT)
     x = torch.tensor(tokens, dtype=torch.long, device=device)  # Move tensor to device
     x = x.unsqueeze(0).repeat(BATCH, 1)  # (B, T)
-
+    output = x
     for i in tqdm.trange(MAX_LEN):
         logits, _ = model(x, None)
         logits = logits[:, -1, :].squeeze(1)
@@ -24,9 +25,10 @@ def inference(model: GPT, device: torch.device):
         assert next_idx.shape == (BATCH, 1)
         next_token = torch.gather(top_idx, dim=1, index=next_idx)
         assert next_token.shape == (BATCH, 1)
-        x = torch.cat((x, next_token), dim=1)[:, -Config.block_size:]
+        output = torch.cat((output, next_token), dim=1)
+        x = next_token
 
-    response = enc.decode_batch(x.tolist())
+    response = enc.decode_batch(output.tolist())
     print(f'output = {response}')
 
 torch.manual_seed(50)
@@ -34,5 +36,5 @@ if torch.cuda.is_available():
     device=torch.device('cuda')
 else:
     device=torch.device('cpu')
-model = GPT.from_pretrained().to(device)
+model = GPT.from_pretrained(Config(use_kv_cache=True)).to(device)
 inference(model, device=device)
