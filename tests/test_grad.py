@@ -127,3 +127,29 @@ def test_more_ops():
     # backward pass went well
     assert abs(amg._grad - apt.grad.item()) < tol
     assert abs(bmg._grad - bpt.grad.item()) < tol
+
+def test_value_tanh():
+    a = Value(0.0)
+    b = a.tanh()
+    assert b.data == 0.0, f"Expected 0.0, got {b.data}"
+
+    a = Value(1.0)
+    b = a.tanh()
+    assert pytest.approx(b.data, rel=1e-5) == 0.76159, f"Expected approx 0.76159, got {b.data}"
+
+    a = Value(-1.0)
+    b = a.tanh()
+    assert pytest.approx(b.data, rel=1e-5) == -0.76159, f"Expected approx -0.76159, got {b.data}"
+
+def test_value_backward_tanh():
+    a = Value(1.0)
+    b = a.tanh()
+    b.backward()
+    expected_grad = 1 - b.data**2
+    assert pytest.approx(a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"
+
+    a = Value(-1.0)
+    b = a.tanh()
+    b.backward()
+    expected_grad = 1 - b.data**2
+    assert pytest.approx(a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"

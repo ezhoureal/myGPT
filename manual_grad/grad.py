@@ -1,3 +1,6 @@
+import math
+
+
 class Value:
     def __init__(self, data, _children=(), op='', label=''):
         self.data = data
@@ -25,6 +28,14 @@ class Value:
         def _backward():
             self._grad += out._grad * other.data
             other._grad += out._grad * self.data
+        out._backward = _backward
+        return out
+    
+    def tanh(self):
+        t = (2 / (1 + (math.e ** (-2 * self.data)))) - 1
+        out = Value(t, (self,), 'tanh')
+        def _backward():
+            self._grad += out._grad * (1 - t ** 2)
         out._backward = _backward
         return out
     
