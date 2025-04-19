@@ -1,4 +1,7 @@
-import pytest
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import torch
 from model import Config, Attention, AttentionWithKVCache
 
@@ -57,6 +60,3 @@ def test_kv_cache_matches_attention():
         output_kv_attention = kv_attention(inc).squeeze(1)
         assert output_attention.shape == output_kv_attention.shape
         assert torch.allclose(output_attention, output_kv_attention, atol=1e-5), "Outputs of Attention and AttentionWithKVCache do not match"
-
-if __name__ == "__main__":
-    pytest.main()
