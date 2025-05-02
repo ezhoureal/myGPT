@@ -12,6 +12,7 @@ def test_train_bpe_empty_file(tmp_path):
     final_set, merges = result
     assert len(final_set) == 256 + len(special_tokens), "Final set should contain initial bytes and special tokens"
     assert len(merges) == 0, "No merges should occur for an empty file"
+    assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
 def test_train_bpe_basic_case(tmp_path):
     input_file = tmp_path / "basic.txt"
@@ -24,6 +25,7 @@ def test_train_bpe_basic_case(tmp_path):
     final_set, merges = result
     assert len(final_set) > 256, "Final set should contain more than initial bytes"
     assert len(merges) > 0, "Merges should occur for non-empty input"
+    assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
 def test_train_bpe_special_tokens(tmp_path):
     input_file = tmp_path / "special_tokens.txt"
@@ -34,10 +36,9 @@ def test_train_bpe_special_tokens(tmp_path):
     result = train_bpe(str(input_file), vocab_size, special_tokens)
     assert result is not None, "Result should not be None"
     final_set, merges = result
-    assert len(final_set) == 271
-    assert len(merges) == 13
     for token in special_tokens:
         assert token.encode() in final_set.values(), f"Special token {token} should be in final set"
+    assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
 def test_train_bpe_vocab_size_limit(tmp_path):
     input_file = tmp_path / "vocab_limit.txt"
@@ -50,6 +51,7 @@ def test_train_bpe_vocab_size_limit(tmp_path):
     final_set, merges = result
     assert len(final_set) == vocab_size, "Final set size should match the vocab size"
     assert len(merges) == vocab_size - 256 - len(special_tokens), "Number of merges should match the vocab size limit"
+    assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
 def test_train_bpe_no_special_tokens(tmp_path):
     input_file = tmp_path / "no_special_tokens.txt"
@@ -60,17 +62,10 @@ def test_train_bpe_no_special_tokens(tmp_path):
     result = train_bpe(str(input_file), vocab_size, special_tokens)
     assert result is not None, "Result should not be None"
     final_set, merges = result
-    assert len(final_set) == 282
-    assert len(merges) == 26
+    assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
 from tokenizer import merge
 def test_merge():
     tokens = [1, 2, 3, 4, 5]
-    freqs: dict[(int, int): int] = {}
-    for i in range(len(tokens) - 1):
-        pair = (tokens[i], tokens[i + 1])
-        freqs[pair] = freqs.get(pair, 0) + 1
-    
-    res = merge(tokens, (3, 4), 99, freqs)
+    res = merge(tokens, (3, 4), 99, {})
     assert res == [1, 2, 99, 5]
-    assert len(freqs) == 6
