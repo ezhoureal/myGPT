@@ -1,17 +1,18 @@
 import regex
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-def merge(ids: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
+def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
     i = 0
     res = []
-    while i < len(ids):
-        if i < len(ids) - 1 and ids[i] == pair_to_merge[0] and ids[i + 1] == pair_to_merge[1]:
+    while i < len(tokens):
+        if i < len(tokens) - 1 and tokens[i] == pair_to_merge[0] and tokens[i + 1] == pair_to_merge[1]:
             res.append(new_id)
             i += 2
         else:
-            res.append(ids[i])
+            res.append(tokens[i])
             i += 1
 
+    # update freqs based on new tokens
     for i in range(len(res) - 1):
         if res[i] == new_id or res[i + 1] == new_id:
             pair = (res[i], res[i + 1])
@@ -66,7 +67,3 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
         final_set[len(final_set)] = special.encode()
 
     return (final_set, merges)
-
-if __name__ == "__main__":
-    res = train_bpe("small_set.txt", 300, ["<|endoftext|>"])
-    print(res)
