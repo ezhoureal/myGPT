@@ -36,7 +36,27 @@ def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
     # freqs.pop(pair_to_merge)
     return res
 
-def train_bpe(input_path, vocab_size, special_tokens: list[str]):
+def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[int, bytes], list[tuple[int, int]]]:
+    """
+    Trains a Byte Pair Encoding (BPE) tokenizer on a given text corpus.
+    Args:
+        input_path (str): The file path to the input text corpus.
+        vocab_size (int): The desired vocabulary size, including special tokens.
+        special_tokens (list[str]): A list of special tokens to include in the vocabulary.
+    Returns:
+        tuple[dict[int, bytes], list[tuple[int, int]]]: 
+            - A dictionary mapping token IDs to their corresponding byte sequences.
+            - A list of merge operations represented as tuples of token IDs.
+    Raises:
+        AssertionError: If `vocab_size` is not greater than 0.
+    Notes:
+        - The function reads the input corpus, tokenizes it into byte sequences, and iteratively merges the most 
+          frequent byte pairs until the desired vocabulary size is reached.
+        - Special tokens are added to the vocabulary after the merging process.
+        - The function assumes that the input corpus is encoded in UTF-8 and uses a regex pattern (`PAT`) 
+          to tokenize the text.
+        - The `get_most_frequent_pair` and `merge` helper functions are expected to be defined elsewhere in the code.
+    """
     assert vocab_size > 0
     pre_tokens = None
     with open(input_path, 'r') as f:
@@ -67,10 +87,9 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
         if len(freqs) == 0:
             break
         tokens_to_merge: tuple[int, int] = max(freqs, key=freqs.get)
-        byte_pair = (vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]])
-        merges.append(byte_pair)
+        merges.append(tokens_to_merge)
         new_id = len(vocab)
-        vocab[new_id] = b"".join(byte_pair)
+        vocab[new_id] = [vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]]]
         new_tokens = []
         for word in tokens:
             new_chunk = merge(word, tokens_to_merge, new_id, freqs)
@@ -82,15 +101,39 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
 
     return (vocab, merges)
 
-def encode(text: str, map: dict[int, bytes], merges: list[(int, int)]):
-    b2t = {v: k for k, v in map.items()} # bytes to token map
-    textBytes = text.encode()
+def encode(text: str, merges: list[(int, int)]):
+    text_bytes = text.encode()
     pos: dict[(int, int) : [int]] = {} # cache position of pairs
-    for i in range(len(textBytes)) - 1:
-        pair = (textBytes[i], textBytes[i + 1])
+    for i in range(len(text_bytes) - 1):
+        pair = (text_bytes[i], text_bytes[i + 1])
         pos.get(pair, []).append(i)
+    new_id = 256
     for merge in merges:
-        assert pos.get(merge)
+        if pos.get(merge) == None:
+            new_id += 1
+            continue
+        to_merge = pos.get(merge)
+        print(f'found a matching merge, merge = {merge}, to_merge = {to_merge}')
+        new_text = []
+        i = 0
+        while i < len(text_bytes):
+            if i in to_merge:
+                new_text.append(new_id)
+                i += 2
+            else:
+                new_text.append(merge)
+                i += 1
+        new_id += 1
+        text_bytes = new_text
+    return text_bytes
+
+def decode(tokens: bytes, vocab: dict[int, bytes]) -> str:
+    res = []
+    for token in tokens:
+        res.append(vocab.get(token, b''))
+    return b''.join(res).decode()
 
 if __name__ == "__main__":
-    res = train_bpe("small_set.txt", 300, [])
+    vocab, merges = train_bpe("data.txt", 300, [])
+    text = "Hello world"
+    assert decode(encode(text, merges), vocab) == text
