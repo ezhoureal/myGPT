@@ -62,3 +62,15 @@ def test_train_bpe_no_special_tokens(tmp_path):
     final_set, merges = result
     assert len(final_set) == 282
     assert len(merges) == 26
+
+from tokenizer import merge
+def test_merge():
+    tokens = [1, 2, 3, 4, 5]
+    freqs: dict[(int, int): int] = {}
+    for i in range(len(tokens) - 1):
+        pair = (tokens[i], tokens[i + 1])
+        freqs[pair] = freqs.get(pair, 0) + 1
+    
+    res = merge(tokens, (3, 4), 99, freqs)
+    assert res == [1, 2, 99, 5]
+    assert len(freqs) == 6

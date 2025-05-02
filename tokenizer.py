@@ -7,7 +7,12 @@ def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
     while i < len(tokens):
         if i < len(tokens) - 1 and tokens[i] == pair_to_merge[0] and tokens[i + 1] == pair_to_merge[1]:
             res.append(new_id)
+            if i > 0:
+                freqs[(tokens[i - 1], tokens[i])] -= 1
+            if i < len(tokens) - 2:
+                freqs[(tokens[i + 1], tokens[i + 2])] -= 1
             i += 2
+
         else:
             res.append(tokens[i])
             i += 1
@@ -18,10 +23,6 @@ def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
             pair = (res[i], res[i + 1])
             freqs[pair] = freqs.get(pair, 0) + 1
     return res
-
-freqs: dict[(int, int): int] = {}
-res = merge([1, 2, 3, 4, 5], (3, 4), 99, {})
-print(res)
 
 def train_bpe(input_path, vocab_size, special_tokens: list[str]):
     assert vocab_size > 0
@@ -52,8 +53,8 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
     for _ in range(vocab_size - 256 - len(special_tokens)):
         if len(freqs) == 0:
             break
-        most_frequent = max(freqs.items(), key=lambda x: (x[1], x[0]))[0]
-        merges.append((final_set[most_frequent[0]], final_set[most_frequent[1]]))
+        most_frequent: tuple[int, int] = max(freqs.items(), key=lambda x: (x[1], x[0]))[0]
+        merges.append((most_frequent[0], most_frequent[1]))
         new_id = len(final_set)
         final_set[new_id] = most_frequent
         freqs.pop(most_frequent)
@@ -67,3 +68,11 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
         final_set[len(final_set)] = special.encode()
 
     return (final_set, merges)
+
+if __name__ == "__main__":
+    res = train_bpe("small_set.txt", 300, [])
+
+# def encode(text: str, map: dict[int, bytes], merges: list[(bytes, bytes)]):
+#     textBytes = text.encode()
+#     for merge in merges:
+        
