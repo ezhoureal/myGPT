@@ -47,32 +47,39 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]):
                 freqs[pair] = freqs.get(pair, 0) + 1
             words[-1].append(word[i])
 
-    final_set: dict[int, bytes] = { i : i for i in range(256)}
+    vocab: dict[int, bytes] = { i : i.to_bytes() for i in range(256)}
     merges: list[(bytes, bytes)] = []
 
     for _ in range(vocab_size - 256 - len(special_tokens)):
         if len(freqs) == 0:
             break
-        most_frequent: tuple[int, int] = max(freqs.items(), key=lambda x: (x[1], x[0]))[0]
-        merges.append((most_frequent[0], most_frequent[1]))
-        new_id = len(final_set)
-        final_set[new_id] = most_frequent
-        freqs.pop(most_frequent)
+        tokens_to_merge: tuple[int, int] = max(freqs.items(), key=lambda x: (x[1], x[0]))[0]
+        byte_pair = (vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]])
+        merges.append(byte_pair)
+        new_id = len(vocab)
+        vocab[new_id] = []
+        freqs.pop(tokens_to_merge)
         new_words = []
         for word in words:
-            new_word = merge(word, most_frequent, new_id, freqs)
+            new_word = merge(word, tokens_to_merge, new_id, freqs)
             new_words.append(new_word)
         words = new_words
 
     for special in special_tokens:
-        final_set[len(final_set)] = special.encode()
+        vocab[len(vocab)] = special.encode()
 
-    return (final_set, merges)
+    return (vocab, merges)
+
+def encode(text: str, map: dict[int, bytes], merges: list[(int, int)]):
+    b2t = {v: k for k, v in map.items()} # bytes to token map
+    textBytes = text.encode()
+    pos: dict[(int, int) : [int]] = {} # cache position of pairs
+    for i in range(len(textBytes)) - 1:
+        pair = (textBytes[i], textBytes[i + 1])
+        pos.get(pair, []).append(i)
+    for merge in merges:
+        assert pos.get(merge)
 
 if __name__ == "__main__":
     res = train_bpe("small_set.txt", 300, [])
-
-# def encode(text: str, map: dict[int, bytes], merges: list[(bytes, bytes)]):
-#     textBytes = text.encode()
-#     for merge in merges:
-        
+    print(f'empty = {ord(' ')}')
