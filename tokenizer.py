@@ -52,7 +52,6 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
         corpus = f.read()
         # Split by special tokens
         segments = regex.split("|".join(special_tokens), corpus)
-        print(f'segments = {segments}')
         # Further split each segment using PAT
         pre_tokens = []
         for segment in segments:
@@ -62,22 +61,12 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
     if pre_tokens is None:
         return
     
-    freqs: dict[(int, int): int] = {}
-    tokens: list[list[int]] = []
-    # init
-    for word in pre_tokens:
-        tokens.append([])
-        for i in range(len(word)):
-            if i < len(word) - 1:
-                pair = (word[i], word[i + 1])
-                freqs[pair] = freqs.get(pair, 0) + 1
-            tokens[-1].append(word[i])
-
+    tokens: list[list[int]] = pre_tokens
     vocab: dict[int, bytes] = { i : i.to_bytes() for i in range(256)}
-    merges: list[(bytes, bytes)] = []
+    merges: list[tuple[int, int]] = []
 
+    freqs: dict[(int, int): int] = get_freq(tokens)
     for _ in tqdm.trange(vocab_size - 256 - len(special_tokens)):
-        freqs = get_freq(tokens)
         if len(freqs) == 0:
             break
         tokens_to_merge: tuple[int, int] = max(freqs, key=freqs.get)
@@ -86,15 +75,29 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
         vocab[new_id] = b''.join([vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]]])
         print(f'merging {vocab[tokens_to_merge[0]].decode()} and {vocab[tokens_to_merge[1]].decode()}, in token id = {tokens_to_merge}')
         new_tokens = []
-        for word in tokens:
-            new_chunk = merge(word, tokens_to_merge, new_id)
+        for chunk in tokens:
+            new_chunk = merge(chunk, tokens_to_merge, new_id)
             new_tokens.append(new_chunk)
         tokens = new_tokens
+        freqs.pop(tokens_to_merge)
+        update_freq(freqs, tokens, new_id)
 
     for special in special_tokens:
         vocab[len(vocab)] = special.encode()
 
     return (vocab, merges)
+
+def update_freq(freqs: dict[(int, int): int], tokens, new_id):
+    for chunk in tokens:
+        for i, token in enumerate(chunk):
+            if token != new_id:
+                continue
+            if i > 0:
+                prev_pair = (chunk[i - 1], new_id)
+                freqs[prev_pair] = freqs.get(prev_pair, 0) + 1
+            if i < len(chunk) - 1:
+                next_pair = (new_id, chunk[i + 1])
+                freqs[next_pair] = freqs.get(next_pair, 0) + 1
 
 def encode(text: str, merges: list[tuple[int, int]]) -> list[int]:
     ids = list(map(int, text.encode()))
@@ -111,7 +114,7 @@ def decode(tokens: list[int], vocab: dict[int, bytes]) -> str:
     return b''.join(res).decode()
 
 if __name__ == "__main__":
-    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
+    vocab, merges = train_bpe("data.txt", 300, ["SPECIAL"])
     text = "Hello world"
     encoded = encode(text, merges)
     decoded = decode(encoded, vocab)
