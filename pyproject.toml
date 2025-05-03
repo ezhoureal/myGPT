@@ -1,21 +1,30 @@
 [project]
 name = "mygpt_ezhoureal"
 version = "0.0.1"
-authors = [
-  { name="Tianer Zhou", email="ezhoureal@gmail.com" },
-]
 description = "An experimental GPT-2 implementation for learning purposes"
-readme = "README.md"
+authors = [{ name = "Tianer Zhou", email = "ezhoureal@gmail.com" }]
 requires-python = ">=3.9"
+readme = "README.md"
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Operating System :: OS Independent",
 ]
-license = "MIT"
+dependencies = [
+    "pytest==8.3.5",
+    "regex==2024.11.6",
+    "tiktoken==0.9.0",
+    "torch==2.6.0",
+    "tqdm==4.67.1",
+    "transformers==4.51.2",
+]
 license-files = ["LICENSE"]
 
 [project.urls]
 Homepage = "https://github.com/ezhoureal/mygpt"
 Documentation = "https://github.com/ezhoureal/mygpt#readme"
+
+[tool.uv]
+package = false
