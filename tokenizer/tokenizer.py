@@ -1,7 +1,15 @@
 import regex
 from collections import Counter
-
 import tqdm
+
+# regular expression pattern taken from 
+# The pattern is designed to match the following:
+# - Contractions like 's, 'd, 'm, 't, 'll, 've, 're (e.g., "it's", "you've").
+# - Words containing letters (\p{L}+), optionally preceded by a space.
+# - Numbers (\p{N}+), optionally preceded by a space.
+# - Non-whitespace, non-letter, non-number characters ([^\s\p{L}\p{N}]+), optionally preceded by a space.
+# - Whitespace sequences (\s+) that are not followed by non-whitespace characters.
+# The pattern ensures that text is split into meaningful tokens while preserving spaces and special characters.
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 def get_freq(tokens: list[list[int]]):
