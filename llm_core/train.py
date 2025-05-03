@@ -5,8 +5,8 @@ import time
 import torch
 import torch.nn as nn
 import tqdm
-from data_loader import DataLoader
-from model import GPT, Config
+from llm_core.data_loader import DataLoader
+from llm_core.model import GPT, Config
 
 from torch.distributed import init_process_group, destroy_process_group
 

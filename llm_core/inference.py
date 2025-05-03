@@ -1,7 +1,7 @@
 import torch
 import tiktoken
 import tqdm
-from model import Config, GPT
+from llm_core.model import Config, GPT
 
 @torch.no_grad
 def inference(model: GPT, device: torch.device):

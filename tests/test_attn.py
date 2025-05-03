@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import torch
-from model import Config, Attention, AttentionWithKVCache
+from llm_core.model import Config, Attention, AttentionWithKVCache
 
 def test_attention_output_shape():
     config = Config(block_size=16, n_emb=32, n_head=4)

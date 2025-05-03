@@ -1,11 +1,11 @@
 import os
 import time
 import pytest
-from tokenizer import train_bpe, encode
+from tokenizer.tokenizer import train_bpe, encode
 
 @pytest.fixture
 def test_file():
-    return "small_set.txt"
+    return "data/small_set.txt"
 
 def test_tokenizer_speed(test_file):
     TOTAL_BYTES = os.path.getsize(test_file)

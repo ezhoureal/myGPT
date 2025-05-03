@@ -1,5 +1,5 @@
 import pytest
-from tokenizer import train_bpe
+from tokenizer.tokenizer import train_bpe
 
 def test_train_bpe_empty_file(tmp_path):
     input_file = tmp_path / "empty.txt"
@@ -64,13 +64,13 @@ def test_train_bpe_no_special_tokens(tmp_path):
     final_set, merges = result
     assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
-from tokenizer import merge
+from tokenizer.tokenizer import merge
 def test_merge():
     tokens = [1, 2, 3, 4, 5]
     res = merge(tokens, (3, 4), 99)
     assert res == [1, 2, 99, 5]
 
-from tokenizer import encode, decode
+from tokenizer.tokenizer import encode, decode
 
 def test_encode_no_merges():
     merges = []  # No merges applied
@@ -103,7 +103,7 @@ def test_decode_with_special_tokens():
     assert decoded == "hello<|endoftext|>", f"Decoded output mismatch: {decoded}"
 
 def test_integrated():
-    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
+    vocab, merges = train_bpe("data/small_set.txt", 300, ["SPECIAL"])
     text = "Hello world"
     encoded = encode(text, merges)
     decoded = decode(encoded, vocab)

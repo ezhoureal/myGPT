@@ -1,6 +1,6 @@
 # myGPT Project
 
-This project re-implements GPT-2 for learning purposes. Inspired by (nanoGPT)[https://github.com/karpathy/nanoGPT]
+This project re-implements many aspects of LLM systems for learning purposes. Inspired by (nanoGPT)[https://github.com/karpathy/nanoGPT]
 
 ## Installation
 
