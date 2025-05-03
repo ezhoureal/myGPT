@@ -114,7 +114,7 @@ def decode(tokens: list[int], vocab: dict[int, bytes]) -> str:
     return b''.join(res).decode()
 
 if __name__ == "__main__":
-    vocab, merges = train_bpe("data.txt", 300, ["SPECIAL"])
+    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
     text = "Hello world"
     encoded = encode(text, merges)
     decoded = decode(encoded, vocab)
