@@ -18,24 +18,12 @@ def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id):
     while i < len(tokens):
         if i < len(tokens) - 1 and tokens[i] == pair_to_merge[0] and tokens[i + 1] == pair_to_merge[1]:
             res.append(new_id)
-            # if i > 0:
-            #     freqs[(tokens[i - 1], tokens[i])] -= 1
-            # if i < len(tokens) - 2:
-            #     freqs[(tokens[i + 1], tokens[i + 2])] -= 1
             i += 2
             cnt += 1
 
         else:
             res.append(tokens[i])
             i += 1
-
-    # update freqs based on new tokens
-    # for i in range(len(res) - 1):
-    #     if res[i] == new_id or res[i + 1] == new_id:
-    #         pair = (res[i], res[i + 1])
-    #         freqs[pair] = freqs.get(pair, 0) + 1
-    # assert(cnt == freqs.get(pair_to_merge, 0)), f'cnt = {cnt}'
-    # freqs.pop(pair_to_merge)
     return res
 
 def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[int, bytes], list[tuple[int, int]]]:
@@ -60,12 +48,16 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
         - The `get_most_frequent_pair` and `merge` helper functions are expected to be defined elsewhere in the code.
     """
     assert vocab_size > 0
-    pre_tokens = None
     with open(input_path, 'r') as f:
         corpus = f.read()
-        # todo: read in chunks
-        pre_tokens: list[str] = regex.findall(PAT, corpus)
-        pre_tokens: list[bytes] = [p.encode() for p in pre_tokens]
+        # Split by special tokens
+        segments = regex.split("|".join(special_tokens), corpus)
+        print(f'segments = {segments}')
+        # Further split each segment using PAT
+        pre_tokens = []
+        for segment in segments:
+            matches = regex.finditer(PAT, segment)
+            pre_tokens.extend([m.group().encode() for m in matches])
 
     if pre_tokens is None:
         return

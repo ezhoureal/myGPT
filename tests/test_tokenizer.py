@@ -29,7 +29,7 @@ def test_train_bpe_basic_case(tmp_path):
 
 def test_train_bpe_special_tokens(tmp_path):
     input_file = tmp_path / "special_tokens.txt"
-    input_file.write_text("test data")
+    input_file.write_text("test<|endoftext|> data")
     vocab_size = 300
     special_tokens = ["<|endoftext|>", "<|pad|>"]
 
