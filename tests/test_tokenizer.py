@@ -69,3 +69,42 @@ def test_merge():
     tokens = [1, 2, 3, 4, 5]
     res = merge(tokens, (3, 4), 99, {})
     assert res == [1, 2, 99, 5]
+
+from tokenizer import encode, decode
+
+def test_encode_no_merges():
+    merges = []  # No merges applied
+    text = "test"
+    encoded = encode(text, merges)
+    assert encoded == text.encode(), f"Encoded output mismatch: {encoded}"
+
+def test_encode_special_characters():
+    merges = [(33, 33)]  # Example merge for "!!"
+    text = "hello!!"
+    encoded = encode(text, merges)
+    assert encoded[-1] == 256, f"Encoded output mismatch: {encoded}"
+
+def test_decode_basic_case():
+    vocab = {256: b"he", 257: b"llo"}
+    tokens = [256, 257]
+    decoded = decode(tokens, vocab)
+    assert decoded == "hello", f"Decoded output mismatch: {decoded}"
+
+def test_decode_no_vocab_match():
+    vocab = {256: b"he", 257: b"llo"}
+    tokens = [258]  # Token not in vocab
+    decoded = decode(tokens, vocab)
+    assert decoded == "", f"Decoded output mismatch: {decoded}"
+
+def test_decode_with_special_tokens():
+    vocab = {256: b"he", 257: b"llo", 258: b"<|endoftext|>"}
+    tokens = [256, 257, 258]
+    decoded = decode(tokens, vocab)
+    assert decoded == "hello<|endoftext|>", f"Decoded output mismatch: {decoded}"
+
+def test_integrated():
+    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
+    text = "Hello world"
+    encoded = encode(text, merges)
+    decoded = decode(encoded, vocab)
+    assert decoded == text, decoded

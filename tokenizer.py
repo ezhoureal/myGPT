@@ -104,7 +104,7 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
 
     return (vocab, merges)
 
-def encode(text: str, merges: list[tuple[int, int]]):
+def encode(text: str, merges: list[tuple[int, int]]) -> bytes:
     text_bytes = text.encode()
     new_id = 256
     for merge in merges:
