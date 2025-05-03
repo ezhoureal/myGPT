@@ -1,5 +1,7 @@
 import regex
 from collections import Counter
+
+import tqdm
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 def get_freq(tokens: list[list[int]]):
@@ -82,14 +84,15 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
     vocab: dict[int, bytes] = { i : i.to_bytes() for i in range(256)}
     merges: list[(bytes, bytes)] = []
 
-    for _ in range(vocab_size - 256 - len(special_tokens)):
+    for _ in tqdm.trange(vocab_size - 256 - len(special_tokens)):
         freqs = get_freq(tokens)
         if len(freqs) == 0:
             break
         tokens_to_merge: tuple[int, int] = max(freqs, key=freqs.get)
         merges.append(tokens_to_merge)
         new_id = len(vocab)
-        vocab[new_id] = [vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]]]
+        vocab[new_id] = b''.join([vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]]])
+        print(f'merging {vocab[tokens_to_merge[0]].decode()} and {vocab[tokens_to_merge[1]].decode()}, in token id = {tokens_to_merge}')
         new_tokens = []
         for word in tokens:
             new_chunk = merge(word, tokens_to_merge, new_id, freqs)
@@ -101,19 +104,19 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
 
     return (vocab, merges)
 
-def encode(text: str, merges: list[(int, int)]):
+def encode(text: str, merges: list[tuple[int, int]]):
     text_bytes = text.encode()
-    pos: dict[(int, int) : [int]] = {} # cache position of pairs
-    for i in range(len(text_bytes) - 1):
-        pair = (text_bytes[i], text_bytes[i + 1])
-        pos.get(pair, []).append(i)
     new_id = 256
     for merge in merges:
-        if pos.get(merge) == None:
+        pos: dict[(int, int) : [int]] = {} # cache position of pairs
+        for i in range(len(text_bytes) - 1):
+            pair = (text_bytes[i], text_bytes[i + 1])
+            pos.setdefault(pair, []).append(i)
+
+        if pos.get(merge) is None:
             new_id += 1
             continue
         to_merge = pos.get(merge)
-        print(f'found a matching merge, merge = {merge}, to_merge = {to_merge}')
         new_text = []
         i = 0
         while i < len(text_bytes):
@@ -121,7 +124,7 @@ def encode(text: str, merges: list[(int, int)]):
                 new_text.append(new_id)
                 i += 2
             else:
-                new_text.append(merge)
+                new_text.append(text_bytes[i])
                 i += 1
         new_id += 1
         text_bytes = new_text
@@ -134,6 +137,8 @@ def decode(tokens: bytes, vocab: dict[int, bytes]) -> str:
     return b''.join(res).decode()
 
 if __name__ == "__main__":
-    vocab, merges = train_bpe("data.txt", 300, [])
+    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
     text = "Hello world"
-    assert decode(encode(text, merges), vocab) == text
+    encoded = encode(text, merges)
+    decoded = decode(encoded, vocab)
+    assert decoded == text, decoded
