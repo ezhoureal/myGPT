@@ -48,13 +48,23 @@ fn merge(pair_to_merge: &(u32, u32), new_id: u32, tokens: &Vec<Vec<u32>>) -> Vec
         .collect()
 }
 
-pub fn train_bpe(file_name: String, special_tokens: &Vec<String>, vocab_size: u32) -> Tokenizer {
+fn get_pre_tokens(file_name: &str, special_tokens: &Vec<String>) -> Vec<String> {
     let content = std::fs::read_to_string(file_name).expect("Failed to read the file");
+    let special_tokens_pattern = special_tokens.join("|");
+    let special_tokens_regex = regex::Regex::new(&special_tokens_pattern).expect("Failed to compile special tokens regex");
+    let chunks: Vec<&str> = special_tokens_regex.split(&content).collect();
 
     const PAT: &str = r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+"#;
     let re = regex::Regex::new(PAT).expect("Failed to compile regex");
-    let pre_tokens: Vec<&str> = re.find_iter(&content).map(|mat| mat.as_str()).collect();
+    let pre_tokens: Vec<String> = chunks
+        .iter()
+        .flat_map(|segment| re.find_iter(segment).map(|mat| mat.as_str().to_string()))
+        .collect();
+    pre_tokens
+}
 
+pub fn train_bpe(file_name: String, special_tokens: &Vec<String>, vocab_size: u32) -> Tokenizer {
+    let pre_tokens = get_pre_tokens(&file_name, special_tokens);
     let mut vocab: HashMap<u32, Vec<u8>> = (0..256).map(|i| (i, vec![i as u8])).collect();
     let mut tokens: Vec<Vec<u32>> = pre_tokens
         .iter()
@@ -80,6 +90,9 @@ pub fn train_bpe(file_name: String, special_tokens: &Vec<String>, vocab_size: u3
         merges.push(pair_to_merge);
         update_freq(&mut freq, &tokens, i);
         freq.remove(&pair_to_merge);
+    }
+    for special in special_tokens {
+        vocab.insert(vocab.len() as u32, special.as_bytes().to_vec());
     }
     Tokenizer {
         vocab: vocab,
@@ -147,7 +160,7 @@ mod tests {
         let vocab_size = 300;
 
         // Create a temporary file for testing
-        std::fs::write(file_name, "hello world hello").expect("Failed to write test file");
+        std::fs::write(file_name, "hello world<pad>no hello").expect("Failed to write test file");
 
         let tokenizer = train_bpe(file_name.to_string(), &special_tokens, vocab_size);
 
