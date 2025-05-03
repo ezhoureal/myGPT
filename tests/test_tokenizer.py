@@ -67,7 +67,7 @@ def test_train_bpe_no_special_tokens(tmp_path):
 from tokenizer import merge
 def test_merge():
     tokens = [1, 2, 3, 4, 5]
-    res = merge(tokens, (3, 4), 99, {})
+    res = merge(tokens, (3, 4), 99)
     assert res == [1, 2, 99, 5]
 
 from tokenizer import encode, decode
@@ -76,7 +76,7 @@ def test_encode_no_merges():
     merges = []  # No merges applied
     text = "test"
     encoded = encode(text, merges)
-    assert encoded == text.encode(), f"Encoded output mismatch: {encoded}"
+    assert encoded == list(map(int, text.encode())), f"Encoded output mismatch: {encoded}"
 
 def test_encode_special_characters():
     merges = [(33, 33)]  # Example merge for "!!"

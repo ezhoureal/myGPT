@@ -11,7 +11,7 @@ def get_freq(tokens: list[list[int]]):
             pairs.append((token[i], token[i + 1]))
     return Counter(pairs)
 
-def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id, freqs):
+def merge(tokens: list[int], pair_to_merge: tuple[int, int], new_id):
     i = 0
     res = []
     cnt = 0
@@ -95,7 +95,7 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
         print(f'merging {vocab[tokens_to_merge[0]].decode()} and {vocab[tokens_to_merge[1]].decode()}, in token id = {tokens_to_merge}')
         new_tokens = []
         for word in tokens:
-            new_chunk = merge(word, tokens_to_merge, new_id, freqs)
+            new_chunk = merge(word, tokens_to_merge, new_id)
             new_tokens.append(new_chunk)
         tokens = new_tokens
 
@@ -104,33 +104,15 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
 
     return (vocab, merges)
 
-def encode(text: str, merges: list[tuple[int, int]]) -> bytes:
-    text_bytes = text.encode()
+def encode(text: str, merges: list[tuple[int, int]]) -> list[int]:
+    ids = list(map(int, text.encode()))
     new_id = 256
-    for merge in merges:
-        pos: dict[(int, int) : [int]] = {} # cache position of pairs
-        for i in range(len(text_bytes) - 1):
-            pair = (text_bytes[i], text_bytes[i + 1])
-            pos.setdefault(pair, []).append(i)
-
-        if pos.get(merge) is None:
-            new_id += 1
-            continue
-        to_merge = pos.get(merge)
-        new_text = []
-        i = 0
-        while i < len(text_bytes):
-            if i in to_merge:
-                new_text.append(new_id)
-                i += 2
-            else:
-                new_text.append(text_bytes[i])
-                i += 1
+    for merge_info in merges:
+        ids = merge(ids, merge_info, new_id)
         new_id += 1
-        text_bytes = new_text
-    return text_bytes
+    return ids
 
-def decode(tokens: bytes, vocab: dict[int, bytes]) -> str:
+def decode(tokens: list[int], vocab: dict[int, bytes]) -> str:
     res = []
     for token in tokens:
         res.append(vocab.get(token, b''))
