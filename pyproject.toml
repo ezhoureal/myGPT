@@ -13,6 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "maturin>=1.8.3",
     "pytest==8.3.5",
     "regex==2024.11.6",
     "tiktoken==0.9.0",
@@ -28,3 +29,12 @@ Documentation = "https://github.com/ezhoureal/mygpt#readme"
 
 [tool.uv]
 package = false
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "tokenizer"
+manifest-path = "tokenizer/Cargo.toml"
+
+[build-system]
+requires = ["maturin>=1.0"]
+build-backend = "maturin"

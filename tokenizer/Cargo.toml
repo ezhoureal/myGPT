@@ -6,3 +6,8 @@ edition = "2021"
 [dependencies]
 parameterized = "2.0.0"
 regex = "1.11.1"
+pyo3 = { version = "0.18", features = ["extension-module"] }
+
+[lib]
+name = "rs_tokenizer"
+crate-type = ["cdylib"]
