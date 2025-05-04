@@ -1,8 +1,13 @@
 use std::collections::HashMap;
 
+struct Merge {
+    token_pair: (u32, u32),
+    new_id: u32,
+}
 pub struct Tokenizer {
-    pub vocab: HashMap<u32, Vec<u8>>,
-    pub merges: Vec<(u32, u32)>,
+    vocab: HashMap<u32, Vec<u8>>,
+    merges: Vec<Merge>,
+    special_tokens: HashMap<String, u32>,
 }
 
 type PairFrequency = HashMap<(u32, u32), u32>;
@@ -35,7 +40,10 @@ fn merge(pair_to_merge: &(u32, u32), new_id: u32, tokens: &Vec<Vec<u32>>) -> Vec
             let mut new_chunk = Vec::new();
             let mut i = 0;
             while i < chunk.len() {
-                if i < chunk.len() - 1 && chunk[i] == pair_to_merge.0 && chunk[i + 1] == pair_to_merge.1 {
+                if i < chunk.len() - 1
+                    && chunk[i] == pair_to_merge.0
+                    && chunk[i + 1] == pair_to_merge.1
+                {
                     new_chunk.push(new_id);
                     i += 2; // Skip the next element after a merge
                 } else {
@@ -51,7 +59,8 @@ fn merge(pair_to_merge: &(u32, u32), new_id: u32, tokens: &Vec<Vec<u32>>) -> Vec
 fn get_pre_tokens(file_name: &str, special_tokens: &Vec<String>) -> Vec<String> {
     let content = std::fs::read_to_string(file_name).expect("Failed to read the file");
     let special_tokens_pattern = special_tokens.join("|");
-    let special_tokens_regex = regex::Regex::new(&special_tokens_pattern).expect("Failed to compile special tokens regex");
+    let special_tokens_regex =
+        regex::Regex::new(&special_tokens_pattern).expect("Failed to compile special tokens regex");
     let chunks: Vec<&str> = special_tokens_regex.split(&content).collect();
 
     const PAT: &str = r#"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+"#;
@@ -63,62 +72,112 @@ fn get_pre_tokens(file_name: &str, special_tokens: &Vec<String>) -> Vec<String> 
     pre_tokens
 }
 
-pub fn train_bpe(file_name: String, special_tokens: &Vec<String>, vocab_size: u32) -> Tokenizer {
-    let pre_tokens = get_pre_tokens(&file_name, special_tokens);
-    let mut vocab: HashMap<u32, Vec<u8>> = (0..256).map(|i| (i, vec![i as u8])).collect();
-    let mut tokens: Vec<Vec<u32>> = pre_tokens
-        .iter()
-        .map(|chunk| chunk.as_bytes().iter().map(|&b| b as u32).collect())
-        .collect();
-    let mut merges: Vec<(u32, u32)> = Vec::new();
-    let mut freq = get_freq(&tokens);
-
-    for i in 256..(vocab_size - special_tokens.len() as u32) {
-        if freq.is_empty() {
-            break;
-        }
-        let pair_to_merge = freq
-            .iter()
-            .max_by_key(|element| element.1)
-            .unwrap()
-            .0
-            .clone();
-        println!("pair to merge = {:?}", pair_to_merge);
-        let byte_pair = [&vocab[&pair_to_merge.0][..], &vocab[&pair_to_merge.1][..]].concat();
-        vocab.insert(i, byte_pair);
-        tokens = merge(&pair_to_merge, i, &tokens);
-        merges.push(pair_to_merge);
-        update_freq(&mut freq, &tokens, i);
-        freq.remove(&pair_to_merge);
-    }
-    for special in special_tokens {
-        vocab.insert(vocab.len() as u32, special.as_bytes().to_vec());
-    }
-    Tokenizer {
-        vocab: vocab,
-        merges: merges,
-    }
-}
-
 impl Tokenizer {
+    pub fn train_bpe(file_name: String, special_tokens: Vec<String>, vocab_size: u32) -> Self {
+        let pre_tokens = get_pre_tokens(&file_name, &special_tokens);
+        let mut vocab: HashMap<u32, Vec<u8>> = (0..256).map(|i| (i, vec![i as u8])).collect();
+        let mut tokens: Vec<Vec<u32>> = pre_tokens
+            .iter()
+            .map(|chunk| chunk.as_bytes().iter().map(|&b| b as u32).collect())
+            .collect();
+        let mut merges: Vec<Merge> = Vec::new();
+        let mut freq = get_freq(&tokens);
+
+        for i in 256..(vocab_size - special_tokens.len() as u32) {
+            if freq.is_empty() {
+                break;
+            }
+            let pair_to_merge = freq
+                .iter()
+                .max_by_key(|element| element.1)
+                .unwrap()
+                .0
+                .clone();
+            println!("pair to merge = {:?}", pair_to_merge);
+            let byte_pair = [&vocab[&pair_to_merge.0][..], &vocab[&pair_to_merge.1][..]].concat();
+            vocab.insert(i, byte_pair);
+            tokens = merge(&pair_to_merge, i, &tokens);
+            merges.push(Merge {
+                token_pair: pair_to_merge,
+                new_id: i,
+            });
+            update_freq(&mut freq, &tokens, i);
+            freq.remove(&pair_to_merge);
+        }
+        let special_token_map: HashMap<String, u32> = special_tokens
+            .iter()
+            .map(|special| {
+                let id = vocab.len() as u32;
+                vocab.insert(id, special.as_bytes().to_vec());
+                (special.clone(), id)
+            })
+            .collect();
+        Tokenizer {
+            vocab,
+            merges,
+            special_tokens: special_token_map,
+        }
+    }
+
     pub fn load_from_file(&self) {}
 
-    pub fn encode(&self) {}
+    pub fn encode(&self, content: String) -> Vec<u32> {
+        // first convert special tokens and map other characters to bytes
+        let mut tokens: Vec<Vec<u32>> = vec![Vec::new()];
+        let special_token_map = &self.special_tokens;
 
-    pub fn decode(&self) {}
+        let mut i = 0;
+        while i < content.len() {
+            let mut matched = false;
+
+            for (token, &id) in special_token_map {
+                if content[i..].starts_with(token) {
+                    tokens.push(vec![id]);
+                    tokens.push(Vec::new());
+                    i += token.len();
+                    matched = true;
+                    break;
+                }
+            }
+
+            if !matched {
+                if let Some(last) = tokens.last_mut() {
+                    last.push(content.as_bytes()[i] as u32);
+                }
+                i += 1;
+            }
+        }
+
+        println!("Encoded content: {:?}", tokens);
+        // perform merges
+        let mut freqs = get_freq(&tokens);
+        for merge_record in &self.merges {
+            if !freqs.contains_key(&merge_record.token_pair) {
+                continue;
+            }
+            tokens = merge(&merge_record.token_pair, merge_record.new_id, &tokens);
+            update_freq(&mut freqs, &tokens, merge_record.new_id);
+        }
+        tokens.into_iter().flatten().collect()
+    }
+
+    pub fn decode(&self, tokens: Vec<u32>) -> String {
+        tokens
+            .iter()
+            .map(|token| String::from_utf8_lossy(&self.vocab[&token]).to_string())
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use parameterized::parameterized;
+
     use super::*;
 
     #[test]
     fn test_get_freq() {
-        let tokens = vec![
-            vec![1, 2, 3, 4],
-            vec![2, 3, 4, 5],
-            vec![1, 2, 3, 4],
-        ];
+        let tokens = vec![vec![1, 2, 3, 4], vec![2, 3, 4, 5], vec![1, 2, 3, 4]];
         let freq = get_freq(&tokens);
         assert_eq!(freq[&(1, 2)], 2);
         assert_eq!(freq[&(2, 3)], 3);
@@ -140,32 +199,36 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let tokens = vec![
-            vec![1, 2, 3, 4],
-            vec![2, 3, 4, 5],
-        ];
+        let tokens = vec![vec![1, 2, 3, 4], vec![2, 3, 4, 5]];
         let pair_to_merge = (2, 3);
         let new_id = 6;
         let merged_tokens = merge(&pair_to_merge, new_id, &tokens);
-        assert_eq!(merged_tokens, vec![
-            vec![1, 6, 4],
-            vec![6, 4, 5],
-        ]);
+        assert_eq!(merged_tokens, vec![vec![1, 6, 4], vec![6, 4, 5],]);
     }
 
-    #[test]
-    fn test_train_bpe() {
-        let file_name = "test.txt";
-        let special_tokens = vec!["<pad>".to_string(), "<unk>".to_string()];
-        let vocab_size = 300;
-
+    #[parameterized(train_text = {
+        "hello world<pad>no hello", "rust is amazing<pad>code more"
+    }, validation_text = {
+        "hello<unk>Not me".to_string(), "rust<unk>rocks".to_string()
+    }, file_name = {
+        "text1.txt", "text2.txt"
+    })]
+    fn test_integrated(train_text: &str, validation_text: String, file_name: &str) {
+        const VOCAB_SIZE: u32 = 512;
+        let special_tokens: Vec<String> = vec!["<pad>".to_string(), "<unk>".to_string()];
         // Create a temporary file for testing
-        std::fs::write(file_name, "hello world<pad>no hello").expect("Failed to write test file");
+        std::fs::write(file_name, train_text).expect("Failed to write test file");
 
-        let tokenizer = train_bpe(file_name.to_string(), &special_tokens, vocab_size);
+        let tokenizer =
+            Tokenizer::train_bpe(file_name.to_string(), special_tokens.clone(), VOCAB_SIZE);
 
-        assert!(tokenizer.vocab.len() <= vocab_size as usize);
+        assert!(tokenizer.vocab.len() <= VOCAB_SIZE as usize);
         assert!(!tokenizer.merges.is_empty());
+
+        let tokens = tokenizer.encode(validation_text.clone());
+        println!("tokens = {:?}", tokens);
+        let result = tokenizer.decode(tokens);
+        assert_eq!(validation_text, result);
 
         // Clean up the temporary file
         std::fs::remove_file(file_name).expect("Failed to remove test file");
