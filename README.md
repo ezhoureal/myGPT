@@ -26,6 +26,11 @@ run `tokenizer/tokenizer.py` to train and encode text to tokens
 ### Tokenizer
 Uses Byte Pair Encoding (BPE) tokenizer. The initial python implementation is under directory `tokenizer_py`. A Rust rewrite is in progress under `src` for better performance.
 
+Compile rust binding with `maturin develop --uv`.
+If you're getting this warning: 
+`⚠️ Warning: failed to set package as editable: failed to get version of install backend`, try run `uv pip install -e .` to manually install the package.
+
+
 ## Testing
 to run the test suite, run `pytest` and `cargo test` in the root directory
 

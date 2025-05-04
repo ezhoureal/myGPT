@@ -1,7 +1,7 @@
 import os
 import time
 import pytest
-from tokenizer.tokenizer import train_bpe, encode
+from tokenizer_py.tokenizer import train_bpe, encode
 
 @pytest.fixture
 def test_file():

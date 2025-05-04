@@ -1,5 +1,5 @@
 import pytest
-from tokenizer.tokenizer import train_bpe
+from tokenizer_py.tokenizer import train_bpe
 
 def test_train_bpe_empty_file(tmp_path):
     input_file = tmp_path / "empty.txt"
@@ -64,13 +64,13 @@ def test_train_bpe_no_special_tokens(tmp_path):
     final_set, merges = result
     assert len(set(final_set.values())) == len(final_set), "Final set values should be unique"
 
-from tokenizer.tokenizer import merge
+from tokenizer_py.tokenizer import merge
 def test_merge():
     tokens = [1, 2, 3, 4, 5]
     res = merge(tokens, (3, 4), 99)
     assert res == [1, 2, 99, 5]
 
-from tokenizer.tokenizer import encode, decode
+from tokenizer_py.tokenizer import encode, decode
 
 def test_encode_no_merges():
     merges = []  # No merges applied
