@@ -17,8 +17,17 @@ You can run `llm_core/inference.py` to generate text. Modify the `PROMPT` variab
 
 run `tokenizer/tokenizer.py` to train and encode text to tokens
 
+## Modules
+
+### llm_core
+
+### manual_grad
+
+### Tokenizer
+Uses Byte Pair Encoding (BPE) tokenizer. The initial python implementation is under directory `tokenizer_py`. A Rust rewrite is in progress under `src` for better performance.
+
 ## Testing
-to run the test suite, run `pytest` in the root directory
+to run the test suite, run `pytest` and `cargo test` in the root directory
 
 ## License
 
