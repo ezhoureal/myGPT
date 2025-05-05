@@ -118,22 +118,26 @@ impl Tokenizer {
         }
     }
 
-    pub fn load_from_file(&self) {}
+    pub fn load_from_file() -> Self {
+        todo!()
+    }
 
     pub fn encode(&self, content: String) -> Vec<u32> {
         // first convert special tokens and map other characters to bytes
         let mut tokens: Vec<Vec<u32>> = vec![Vec::new()];
         let special_token_map = &self.special_tokens;
 
-        let mut i = 0;
-        while i < content.len() {
+        let mut chars = content.char_indices().peekable();
+        while let Some((i, _)) = chars.peek() {
             let mut matched = false;
 
             for (token, &id) in special_token_map {
-                if content[i..].starts_with(token) {
+                if content[*i..].starts_with(token) {
                     tokens.push(vec![id]);
                     tokens.push(Vec::new());
-                    i += token.len();
+                    for _ in 0..token.chars().count() {
+                        chars.next();
+                    }
                     matched = true;
                     break;
                 }
@@ -141,9 +145,14 @@ impl Tokenizer {
 
             if !matched {
                 if let Some(last) = tokens.last_mut() {
-                    last.push(content.as_bytes()[i] as u32);
+                    if let Some((_, ch)) = chars.next() {
+                        let mut buf = [0; 4];
+                        let encoded = ch.encode_utf8(&mut buf);
+                        for byte in encoded.as_bytes() {
+                            last.push(*byte as u32);
+                        }
+                    }
                 }
-                i += 1;
             }
         }
 
@@ -160,10 +169,11 @@ impl Tokenizer {
     }
 
     pub fn decode(&self, tokens: Vec<u32>) -> String {
-        tokens
+        let pre_tokens: Vec<u8> = tokens
             .iter()
-            .map(|token| String::from_utf8_lossy(&self.vocab[&token]).to_string())
-            .collect()
+            .flat_map(|token| self.vocab[token].clone())
+            .collect();
+        String::from_utf8_lossy(&pre_tokens).to_string()
     }
 }
 
