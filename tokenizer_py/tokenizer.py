@@ -81,7 +81,6 @@ def train_bpe(input_path, vocab_size, special_tokens: list[str]) -> tuple[dict[i
         merges.append(tokens_to_merge)
         new_id = len(vocab)
         vocab[new_id] = b''.join([vocab[tokens_to_merge[0]], vocab[tokens_to_merge[1]]])
-        print(f'merging {vocab[tokens_to_merge[0]].decode()} and {vocab[tokens_to_merge[1]].decode()}, in token id = {tokens_to_merge}')
         new_tokens = []
         for chunk in tokens:
             new_chunk = merge(chunk, tokens_to_merge, new_id)

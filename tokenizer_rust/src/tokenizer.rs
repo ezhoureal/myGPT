@@ -93,7 +93,6 @@ impl Tokenizer {
                 .unwrap()
                 .0
                 .clone();
-            println!("pair to merge = {:?}", pair_to_merge);
             let byte_pair = [&vocab[&pair_to_merge.0][..], &vocab[&pair_to_merge.1][..]].concat();
             vocab.insert(i, byte_pair);
             tokens = merge(&pair_to_merge, i, &tokens);
@@ -148,7 +147,6 @@ impl Tokenizer {
             }
         }
 
-        println!("Encoded content: {:?}", tokens);
         // perform merges
         let mut freqs = get_freq(&tokens);
         for merge_record in &self.merges {
@@ -226,7 +224,6 @@ mod tests {
         assert!(!tokenizer.merges.is_empty());
 
         let tokens = tokenizer.encode(validation_text.clone());
-        println!("tokens = {:?}", tokens);
         let result = tokenizer.decode(tokens);
         assert_eq!(validation_text, result);
 
