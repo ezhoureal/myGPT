@@ -32,8 +32,8 @@ package = false
 
 [tool.maturin]
 bindings = "pyo3"
-module-name = "tokenizer"
-manifest-path = "tokenizer/Cargo.toml"
+module-name = "rs_tokenizer"
+manifest-path = "tokenizer_rust/Cargo.toml"
 
 [build-system]
 requires = ["maturin>=1.0"]

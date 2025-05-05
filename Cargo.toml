@@ -1,2 +1,3 @@
 [workspace]
-members = ["tokenizer"]
+members = ["tokenizer_rust"]
+resolver = "2"

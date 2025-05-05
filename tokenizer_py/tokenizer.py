@@ -122,8 +122,13 @@ def decode(tokens: list[int], vocab: dict[int, bytes]) -> str:
     return b''.join(res).decode()
 
 if __name__ == "__main__":
-    vocab, merges = train_bpe("small_set.txt", 300, ["SPECIAL"])
+    vocab, merges = train_bpe("data/small_set.txt", 300, ["SPECIAL"])
     text = "Hello world"
     encoded = encode(text, merges)
     decoded = decode(encoded, vocab)
     assert decoded == text, decoded
+
+    import rs_tokenizer as rs_tok
+    tok = rs_tok.PyTokenizer("data/small_set.txt", ["SPECIAL"], 300)
+    rs_encoded = tok.decode(tok.encode(text))
+    assert rs_encoded == decoded
