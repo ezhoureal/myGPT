@@ -2,7 +2,8 @@ use tokenizer::Tokenizer;
 
 mod tokenizer;
 fn main() {
-    println!("Hello, world!");
-    let tokenizer = Tokenizer::train_bpe(String::from("../data/small_set.txt"), vec![String::from("<Special>")], 300);
-    tokenizer.encode("What's up<end>".to_string());
+    let tokenizer = Tokenizer::train_bpe(String::from("data/data.txt"), vec![String::from("<Special>")], 512);
+    let validation_text = "What's up<end>";
+    let encoded = tokenizer.encode(validation_text.to_string());
+    assert_eq!(tokenizer.decode(encoded), validation_text);
 }
