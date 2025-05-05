@@ -1,1 +1,14 @@
 The Tokenizer is a necessary and pervasive component of Large Language Models (LLMs), where it translates between strings and tokens (text chunks). Tokenizers are a completely separate stage of the LLM pipeline: they have their own training sets, training algorithms (Byte Pair Encoding), and after training implement two fundamental functions: encode() from strings to tokens, and decode() back from tokens to strings. In this lecture we build from scratch the Tokenizer used in the GPT series from OpenAI. In the process, we will see that a lot of weird behaviors and problems of LLMs actually trace back to tokenization. We'll go through a number of these issues, discuss why tokenization is at fault, and why someone out there ideally finds a way to delete this stage entirely.
+注：sparse+ 表示在使用稀疏索引，链接末尾的 / 不能缺少。
+
+注：$CARGO_HOME：在 Windows 系统默认为：%USERPROFILE%\.cargo，在类 Unix 系统默认为：$HOME/.cargo。
+
+注：cargo 仍会尝试读取不带 .toml 扩展名的配置文件（即 $CARGO_HOME/config），但从 1.39 版本起，cargo 引入了对 .toml 扩展名的支持，并将其设为首选格式。请根据使用的 cargo 版本选择适当的配置文件名。
+
+注：使用 cargo search、cargo info 等命令时需要添加 --registry mirror，例如 cargo search --registry mirror reqwest。
+
+在 Linux 环境可以使用下面的命令完成：
+
+Use Core Data to save your application’s permanent data for offline use, to cache temporary data, and to add undo functionality to your app on a single device. To sync data across multiple devices in a single iCloud account, Core Data automatically mirrors your schema to a CloudKit container.
+
+Through Core Data’s Data Model editor, you define your data’s types and relationships, and generate respective class definitions. Core Data can then manage object instances at runtime to provide the following features.
