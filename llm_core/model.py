@@ -117,9 +117,6 @@ class Layer(nn.Module):
         ln = self.ln_1(x)
         if hasattr(self, "kv_attn"):
             attn = self.kv_attn(ln)
-            # cmp = self.attn(ln)
-            # assert attn.shape == cmp.shape
-            # assert attn.equal(cmp)
         else:
             attn = self.attn(ln)
         x = x + attn
