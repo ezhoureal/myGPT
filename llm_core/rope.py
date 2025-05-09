@@ -1,4 +1,5 @@
 import torch
+
 def naive_rope_cache(head_dim: int, seq_len: int, theta: float = 10000.0):
     assert head_dim % 2 == 0
     theta_numerator = torch.arange(0, head_dim, 2).float()
@@ -12,21 +13,30 @@ def naive_rope_cache(head_dim: int, seq_len: int, theta: float = 10000.0):
     assert ops.shape == (seq_len, head_dim // 2, 2)
     return ops
 
-HEAD_DIM = 4
-HEADS = 2
-SEQ = 3
-cache = naive_rope_cache(HEAD_DIM, SEQ)
-print(cache)
-x = torch.randn(SEQ, HEADS, HEAD_DIM)
-x = x.reshape(*x.shape[:-1], -1, 2) # group x along the head_dim
+class RotaryPositionalEmbedding(torch.nn.Module):
+    @torch.no_grad
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+        super().__init__()
+        cache = naive_rope_cache(d_k, max_seq_len, theta)
+        self.register_buffer("cache", cache, persistent=False)
 
-print(x)
+    @torch.no_grad
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        cache = self.get_buffer("cache")
+        x = x.reshape(*x.shape[:-1], -1, 2)  # pair x along the head_dim
 
-cache = cache.unsqueeze(1)
-output = torch.stack([
-    x[..., 0] * cache[..., 0] - x[..., 1] * cache[..., 1],
-    x[..., 0] * cache[..., 1] + x[..., 1] * cache[..., 0]
-], dim=-1)
-output = output.flatten(2)
-assert output.shape == (SEQ, HEADS, HEAD_DIM)
-print(output)
+        # Adjust cache based on token_positions
+        cache = cache[token_positions]  # (..., seq_len, d_k // 2, 2)
+        assert cache.shape == (x.shape)
+        output = torch.stack([
+            x[..., 0] * cache[..., 0] - x[..., 1] * cache[..., 1],  # x_1 * cos - x_2 * sin
+            x[..., 0] * cache[..., 1] + x[..., 1] * cache[..., 0]   # x_1 * sin + x_2 * cos
+        ], dim=-1)
+        output = output.flatten(-2)
+        return output
+
+emb = RotaryPositionalEmbedding(10000, 256, 24)
+x = torch.rand(5, 2, 12, 256) # B = (5, 2)
+token_positions = torch.arange(5, 17).expand(5, 2, 12)
+y = emb(x, token_positions)
+assert y.shape == x.shape, y.shape
