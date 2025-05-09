@@ -27,7 +27,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
         # Adjust cache based on token_positions
         cache = cache[token_positions]  # (..., seq_len, d_k // 2, 2)
-        assert cache.shape == (x.shape)
         output = torch.stack([
             x[..., 0] * cache[..., 0] - x[..., 1] * cache[..., 1],  # x_1 * cos - x_2 * sin
             x[..., 0] * cache[..., 1] + x[..., 1] * cache[..., 0]   # x_1 * sin + x_2 * cos
