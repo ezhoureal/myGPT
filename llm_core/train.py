@@ -94,3 +94,14 @@ print(f'using device {device}')
 train(device=device)
 if ddp:
     destroy_process_group()
+
+def save_checkpoint(model: nn.Module, optimizer: torch.optim.Optimizer, iteration: int, out):
+    params = model.state_dict()
+    optim = optimizer.state_dict()
+    torch.save({"model": params, "optimizer": optim, "iteration": iteration}, out)
+
+def load_checkpoint(src, model: nn.Module, optimizer: torch.optim.Optimizer) -> int:
+    obj = torch.load(src)
+    model.load_state_dict(obj["model"])
+    optimizer.load_state_dict(obj["optimizer"])
+    return obj["iteration"]
