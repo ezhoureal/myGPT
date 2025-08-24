@@ -20,8 +20,10 @@ run `tokenizer/tokenizer.py` to train and encode text to tokens
 ## Modules
 
 ### llm_core
+Contains basic GPT implementation, including training and inference (KV cache enabled)
 
 ### manual_grad
+Implements the most basic building block of neural network: neuron, MLP, and back propagation.
 
 ### Tokenizer
 Uses Byte Pair Encoding (BPE) tokenizer. The initial python implementation is under directory `tokenizer_py`. A Rust rewrite is under `tokenizer_rust` for better performance.
