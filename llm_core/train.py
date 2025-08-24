@@ -15,26 +15,32 @@ MAX_LR = 6e-4
 MIN_LR = MAX_LR * 0.1
 WARMUP_STEP = 10
 
+
 def get_lr(step):
     if step < WARMUP_STEP:
         return MIN_LR + step / WARMUP_STEP * (MAX_LR - MIN_LR)
     if step > MAX_STEP:
         return MIN_LR
     decay_ratio = (step - WARMUP_STEP) / (MAX_STEP - WARMUP_STEP)
-    return MIN_LR + (math.cos(decay_ratio * math.pi) / 2.0 + 0.5) * (MAX_LR - MIN_LR)
+    return MIN_LR + (math.cos(decay_ratio * math.pi) /
+                     2.0 + 0.5) * (MAX_LR - MIN_LR)
+
 
 torch.set_float32_matmul_precision('high')
+
+
 def train(device: torch.device):
     desired_batch = 2
     B = 1
-    grad_accum_step = desired_batch // B # to simulate larger batch size
+    grad_accum_step = desired_batch // B  # to simulate larger batch size
     T = 1024
     model = GPT(Config(vocab_size=50304)).to(device)
     if ddp:
         model = nn.parallel.DistributedDataParallel(model, [ddp_local_rank])
     raw_model = model.module if ddp else model
     # model = torch.compile(model)
-    optimizer = raw_model.configure_optimizer(weight_decay=0.1,learning_rate=3e-4, device=device)
+    optimizer = raw_model.configure_optimizer(
+        weight_decay=0.1, learning_rate=3e-4, device=device)
     data = DataLoader(device)
     for i in tqdm.trange(10):
         x, y = data.get_batch(B, T)
@@ -50,12 +56,13 @@ def train(device: torch.device):
                 logits, loss = model(x, y)
             loss /= grad_accum_step
             accum_loss += loss.detach()
-            if ddp: # only sync backward when accum grad finishes
+            if ddp:  # only sync backward when accum grad finishes
                 assert isinstance(model, nn.parallel.DistributedDataParallel)
                 model.require_backward_grad_sync = inner_step == grad_accum_step - 1
             loss.backward()
         if ddp:
-            accum_loss = torch.distributed.all_reduce(accum_loss, op=torch.distributed.ReduceOp.AVG)
+            accum_loss = torch.distributed.all_reduce(
+                accum_loss, op=torch.distributed.ReduceOp.AVG)
 
         norm = nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         lr = get_lr(i)
@@ -65,7 +72,15 @@ def train(device: torch.device):
         if device == 'cuda':
             torch.cuda.synchronize()
         t2 = time.time()
-        print(f'loss = {accum_loss}, token processed speed = {B * T / (t2 - t1)}, norm = {norm:.3e}, learning rate = {lr:.3e}')
+        print(
+            f'loss = {accum_loss}, token processed speed = {
+                B *
+                T /
+                (
+                    t2 -
+                    t1)}, norm = {
+                norm:.3e}, learning rate = {
+                    lr:.3e}')
 
 
 ddp = int(os.environ.get('RANK', -1)) != -1
@@ -95,12 +110,22 @@ train(device=device)
 if ddp:
     destroy_process_group()
 
-def save_checkpoint(model: nn.Module, optimizer: torch.optim.Optimizer, iteration: int, out):
+
+def save_checkpoint(
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        iteration: int,
+        out):
     params = model.state_dict()
     optim = optimizer.state_dict()
-    torch.save({"model": params, "optimizer": optim, "iteration": iteration}, out)
+    torch.save({"model": params, "optimizer": optim,
+               "iteration": iteration}, out)
 
-def load_checkpoint(src, model: nn.Module, optimizer: torch.optim.Optimizer) -> int:
+
+def load_checkpoint(
+        src,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer) -> int:
     obj = torch.load(src)
     model.load_state_dict(obj["model"])
     optimizer.load_state_dict(obj["optimizer"])

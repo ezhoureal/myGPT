@@ -1,6 +1,7 @@
 import torch
 from llm_core.optimizer import CustomAdamOptimizer
 
+
 def _optimize(opt_class) -> torch.Tensor:
     '''
     This test function is borrowed from https://github.com/stanford-cs336/assignment1-basics/blob/main/tests/test_optimizer.py
@@ -25,8 +26,10 @@ def _optimize(opt_class) -> torch.Tensor:
         opt.step()
     return model.weight.detach()
 
+
 def test_adamw():
     pytorch_weights = _optimize(torch.optim.AdamW)
     actual_weights = _optimize(CustomAdamOptimizer)
-    matches_pytorch = torch.allclose(actual_weights, pytorch_weights, atol=1e-4)
-    assert(matches_pytorch)
+    matches_pytorch = torch.allclose(
+        actual_weights, pytorch_weights, atol=1e-4)
+    assert (matches_pytorch)

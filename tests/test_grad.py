@@ -1,6 +1,8 @@
+import torch
 import pytest
 
 from manual_grad.grad import Value
+
 
 def test_value_addition():
     a = Value(2.0)
@@ -8,17 +10,20 @@ def test_value_addition():
     c = a + b
     assert c.data == 5.0, f"Expected 5.0, got {c.data}"
 
+
 def test_value_multiplication():
     a = Value(2.0)
     b = Value(3.0)
     c = a * b
     assert c.data == 6.0, f"Expected 6.0, got {c.data}"
 
+
 def test_value_power():
     a = Value(2.0)
     b = Value(3.0)
     c = a ** b
     assert c.data == 8.0, f"Expected 8.0, got {c.data}"
+
 
 def test_value_relu():
     a = Value(-2.0)
@@ -29,6 +34,7 @@ def test_value_relu():
     d = c.relu()
     assert d.data == 3.0, f"Expected 3.0, got {d.data}"
 
+
 def test_value_backward_addition():
     a = Value(2.0)
     b = Value(3.0)
@@ -36,6 +42,7 @@ def test_value_backward_addition():
     c.backward()
     assert a._grad == 1.0, f"Expected 1.0, got {a._grad}"
     assert b._grad == 1.0, f"Expected 1.0, got {b._grad}"
+
 
 def test_value_backward_multiplication():
     a = Value(2.0)
@@ -45,12 +52,15 @@ def test_value_backward_multiplication():
     assert a._grad == 3.0, f"Expected 3.0, got {a._grad}"
     assert b._grad == 2.0, f"Expected 2.0, got {b._grad}"
 
+
 def test_value_backward_power():
     a = Value(2.0)
     b = Value(3.0)
     c = a ** b
     c.backward()
-    assert pytest.approx(a._grad, rel=1e-5) == 12.0, f"Expected approx 12.0, got {a._grad}"
+    assert pytest.approx(
+        a._grad, rel=1e-5) == 12.0, f"Expected approx 12.0, got {a._grad}"
+
 
 def test_value_zero_grad():
     a = Value(2.0)
@@ -62,7 +72,7 @@ def test_value_zero_grad():
     assert a._grad == 0.0, f"Expected 0.0, got {a._grad}"
     assert b._grad == 0.0, f"Expected 0.0, got {b._grad}"
 
-import torch
+
 def test_sanity_check():
 
     x = Value(-4.0)
@@ -86,6 +96,7 @@ def test_sanity_check():
     assert ymg.data == ypt.data.item()
     # backward pass went well
     assert xmg._grad == xpt.grad.item()
+
 
 def test_more_ops():
 
@@ -128,6 +139,7 @@ def test_more_ops():
     assert abs(amg._grad - apt.grad.item()) < tol
     assert abs(bmg._grad - bpt.grad.item()) < tol
 
+
 def test_value_tanh():
     a = Value(0.0)
     b = a.tanh()
@@ -135,21 +147,26 @@ def test_value_tanh():
 
     a = Value(1.0)
     b = a.tanh()
-    assert pytest.approx(b.data, rel=1e-5) == 0.76159, f"Expected approx 0.76159, got {b.data}"
+    assert pytest.approx(
+        b.data, rel=1e-5) == 0.76159, f"Expected approx 0.76159, got {b.data}"
 
     a = Value(-1.0)
     b = a.tanh()
-    assert pytest.approx(b.data, rel=1e-5) == -0.76159, f"Expected approx -0.76159, got {b.data}"
+    assert pytest.approx(b.data, rel=1e-5) == - \
+        0.76159, f"Expected approx -0.76159, got {b.data}"
+
 
 def test_value_backward_tanh():
     a = Value(1.0)
     b = a.tanh()
     b.backward()
     expected_grad = 1 - b.data**2
-    assert pytest.approx(a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"
+    assert pytest.approx(
+        a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"
 
     a = Value(-1.0)
     b = a.tanh()
     b.backward()
     expected_grad = 1 - b.data**2
-    assert pytest.approx(a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"
+    assert pytest.approx(
+        a._grad, rel=1e-5) == expected_grad, f"Expected approx {expected_grad}, got {a._grad}"
