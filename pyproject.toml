@@ -3,7 +3,7 @@ name = "mygpt_ezhoureal"
 version = "0.0.1"
 description = "An experimental GPT-2 implementation for learning purposes"
 authors = [{ name = "Tianer Zhou", email = "ezhoureal@gmail.com" }]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 readme = "README.md"
 license = "MIT"
 classifiers = [
@@ -15,7 +15,11 @@ classifiers = [
 dependencies = [
     "autopep8>=2.3.2",
     "flake8>=7.3.0",
+    "flax>=0.10.2",
+    "jax[cuda13]>=0.4.38",
+    "jaxlib>=0.4.38",
     "maturin>=1.8.3",
+    "optax>=0.2.4",
     "pytest==8.3.5",
     "regex==2024.11.6",
     "tiktoken==0.9.0",
